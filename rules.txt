@@ -1,0 +1,12 @@
+column|value
+ssn|111111111
+ssn|999999999
+address_1|1111 MAIN ST
+city|ANYWHERE
+postal|11111
+name|JOHN DOE
+name|AMAZON
+name|GIFT CARD
+name|UNKNOWN
+name|ILLEGIBLE
+name|UOFMPARTICIPANT
