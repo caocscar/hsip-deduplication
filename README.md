@@ -6,6 +6,10 @@ These are assumed to be invalid entries:
 3. postal = `11111`
 4. ssn = `111111111`
 
-
+# Matching
+Match on the following two identifiers:
+- SSN/Name
+- SSN/Address
+- Name/Address
 
 
