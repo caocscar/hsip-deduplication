@@ -38,6 +38,5 @@ alex|alec|0.88
 alex|blex|0.83
 alex|alan|0.67
 alex|lily|0.50
-alex|random|0.47
 alex|zhou|0.00
 
