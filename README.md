@@ -7,7 +7,7 @@ These are the high-level steps in the algorithm.
 4. Removes rows that have an amount ≤ 0
 5. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
 5. Sets up rules for matching (see [Matching section](#Matching) below)
-6. Performs matches via blocking
+6. Performs matches using blocking
 7. Assigns an `alexid` to each individual
 8. Tabulate total amount for each indivudal
 9. Write original dataset with two new columns (`alexid` and `total`) to xlsx
