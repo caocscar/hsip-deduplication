@@ -26,4 +26,18 @@ Each of the following column has a score of 0 or 1 to indicate a match or not. T
 The PC can process about 7,000 pairs a second for matches. For a million pairs, that's about 2.5 minutes. The program will print out how many pairs it is computing.
 
 # Matching Algorithm
-We compare two strings using the [Jaro-Winkler edit distance](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance). A threshold of 0.85 is considered for a match.
+We compare two strings using the [Jaro-Winkler distance](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance). A threshold of 0.85 is considered for a match.
+
+The table below shows some example of some string comparisons.
+
+String 1|String 2|Jaro-Winkler Distance
+:---:|---|:---:
+alex|alexis|0.93
+alex|alexander|0.89
+alex|alec|0.88
+alex|blex|0.83
+alex|alan|0.67
+alex|lily|0.50
+alex|random|0.47
+
+
