@@ -38,7 +38,7 @@ These are the high-level steps in the algorithm.
 8. Tabulate total amount for each indivudal
 9. Write original dataset with two new columns (`alexid` and `total`) to xlsx
 
-The source code can be found [here](exploratory.py). There are other minor details in the code that I didn't mention. 
+The source code can be found [here](hsip_alexid.py). There are other minor details in the code that I didn't mention. 
 
 ## Matching
 Each of the following column has a score of 0 or 1 to indicate a match or not. Two rows are a match if they have a score ≥ 2.
