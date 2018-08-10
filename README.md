@@ -28,17 +28,17 @@ The PC can process about 7,500 pairs a second for matches. For a million pairs, 
 ## Algorithm
 These are the high-level steps in the algorithm.
 1. Reads in dataset from "Sheet 1" in Excel file
-2. Read in [rules.txt](#rules.txt) that contains a list of invalid entries
+2. Read in [rules.txt](rules.txt) that contains a list of invalid entries
 3. Removes rows from the dataset with at least two invalid entries or blank values
 4. Removes rows that have an amount ≤ 0
 5. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
-5. Sets up rules for matching (see [Matching section](#Matching) below)
+5. Sets up rules for matching (see [Matching section](#matching) below)
 6. Performs matches using blocking
 7. Assigns an `alexid` to each individual
 8. Tabulate total amount for each indivudal
 9. Write original dataset with two new columns (`alexid` and `total`) to xlsx
 
-The source code can be found [here](#exploratory.py). There are other minor details in the code that I didn't mention. 
+The source code can be found [here](exploratory.py). There are other minor details in the code that I didn't mention. 
 
 ## Matching
 Each of the following column has a score of 0 or 1 to indicate a match or not. Two rows are a match if they have a score ≥ 2.
