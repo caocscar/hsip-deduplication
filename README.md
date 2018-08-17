@@ -29,7 +29,7 @@ The PC can process about 7,500 pairs a second for matches. For a million pairs, 
 These are the high-level steps in the algorithm.
 1. Reads in dataset from "Sheet 1" in Excel file
 2. Read in [rules.txt](rules.txt) that contains a list of invalid entries
-3. Removes rows from the dataset with at least two invalid entries or blank values
+3. Removes rows from the dataset with at least two invalid entries or blank valuesa among name, ssn, address
 4. Removes rows that have an amount ≤ 0
 5. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
 5. Sets up rules for matching (see [Matching section](#matching) below)
@@ -39,6 +39,20 @@ These are the high-level steps in the algorithm.
 9. Write original dataset with two new columns (`alexid` and `total`) to xlsx
 
 The source code can be found [here](hsip_alexid.py). There are other minor details in the code that I didn't mention. 
+
+## Valid and Invalid Street Addresses
+Three parts of the street address: *address_1, city, postal* are considered for the street address filtering.
+An address is considered invalid if the mailing address can not be derived from the relevant entries. The table shows the exhaustive examples from these three columns.
+
+Street Address|Valid Parts|Example
+:---:|---|---
+Valid|address + city + postal|1107 White St, Ann Arbor, 48103
+Valid|address + city|1107 White St, Ann Arbor
+Valid|address + postal|1107 White St, 48104
+Invalid|city + postal|Ann Arbor, 48104
+Invalid|address|1107 White St
+Invalid|city|Ann Arbor
+Invalid|postal|48104
 
 ## Matching
 Each of the following column has a score of 0 or 1 to indicate a match or not. Two rows are a match if they have a score ≥ 2.
