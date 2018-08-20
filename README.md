@@ -42,13 +42,15 @@ The source code can be found [here](hsip_alexid.py). There are other minor detai
 
 ## Valid and Invalid Street Addresses
 Three parts of the street address: *address_1, city, postal* are considered for the street address filtering.
-An address is considered valid if the **address score** is ≥ 1 otherwise it is invalid. The weights were chosen such that a valid score meant that the mailing address could be derived from the relevant entries. The two tables show the relative weights and the exhaustive examples from these three columns.
+An address is considered valid if the **address score** is ≥ 1 otherwise it is invalid. The weights were chosen such that a valid score meant that the mailing address could be derived from the relevant entries. The following table show the relative weights.
 
 Part|Score
 ---|:---:
 address|0.6
 city|0.4
 postal|0.4
+
+The following table shows the exhaustive examples from these three columns.
 
 Valid Parts|Example|Address Score|Street Address
 ---|---|:---:|:---:
