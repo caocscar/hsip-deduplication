@@ -42,28 +42,37 @@ The source code can be found [here](hsip_alexid.py). There are other minor detai
 
 ## Valid and Invalid Street Addresses
 Three parts of the street address: *address_1, city, postal* are considered for the street address filtering.
-An address is considered invalid if the mailing address can not be derived from the relevant entries. The table shows the exhaustive examples from these three columns.
+An address is considered valid if the **address score** is ≥ 1 otherwise it is invalid. The weights were chosen such that a valid score meant that the mailing address could be derived from the relevant entries. The two tables show the relative weights and the exhaustive examples from these three columns.
 
-Street Address|Valid Parts|Example
-:---:|---|---
-Valid|address + city + postal|1107 White St, Ann Arbor, 48103
-Valid|address + city|1107 White St, Ann Arbor
-Valid|address + postal|1107 White St, 48104
-Invalid|city + postal|Ann Arbor, 48104
-Invalid|address|1107 White St
-Invalid|city|Ann Arbor
-Invalid|postal|48104
+Part|Score
+---|:---:
+address|0.6
+city|0.4
+postal|0.4
+
+Valid Parts|Example|Address Score|Street Address
+---|---|:---:|:---:
+address + city + postal|1107 White St, Ann Arbor, 48103|1.4|Valid
+address + city|1107 White St, Ann Arbor|1.0|Valid
+address + postal|1107 White St, 48104|1.0|Valid
+city + postal|Ann Arbor, 48104|0.8|Invalid
+address|1107 White St|0.6|Invalid
+city|Ann Arbor|0.4|Invalid
+postal|48104|0.4|Invalid
 
 ## Matching
-Each of the following column has a score of 0 or 1 to indicate a match or not. Two rows are a match if they have a score ≥ 2.
-- **Name**
-- **Address**
-- **SSN**
+Each of the following column has a score to indicate a match or not. A score ≥ 1 indicates a match for that column. Two rows are a match if they have a score ≥ 2.
+
+Column|Max Score Possible
+---|:---:
+Name|1.0
+Street Address|1.4
+SSN|1.0
 
 **Note:** The **Name** score is considered an average of the *first name* and *last name* score (middle name is not considered).
 
 ## Matching Algorithm
-We compare two strings using the [Jaro-Winkler distance](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance). A default threshold of 0.85 is considered for a match.
+We compare two strings using the [Jaro-Winkler distance](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance). A default threshold of 0.85 is considered for a match (i.e. score = 1)
 
 The table below shows some example of some string comparisons.
 
