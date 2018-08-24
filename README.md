@@ -29,10 +29,10 @@ The PC can process about 7,500 pairs a second for matches. For a million pairs, 
 These are the high-level steps in the algorithm.
 1. Reads in dataset from "Sheet 1" in Excel file
 2. Read in [rules.txt](rules.txt) that contains a list of invalid entries
-3. Removes rows from the dataset with at least two invalid entries or blank values among name, ssn, address
+3. Removes rows from the dataset with at least two invalid entries or blank values among *name, ssn, address*
 4. Removes rows that have an amount ≤ 0
 5. Convert address to lowercase and remove spaces for matching
-6. Convert name to lowercase
+6. Convert name to lowercase for matching
 7. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
 8. Sets up rules for matching (see [Matching section](#matching) below)
 9. Performs matches using blocking
