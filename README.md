@@ -23,7 +23,7 @@ Argument|Shorthand|Usage
 **Tip:** You have to specify a `--filename` argument or it will complain.
 
 ## Runtime
-The PC can process about 7,500 pairs a second for matches. For a million pairs, that's about 2 minutes. The program will print out how many pairs it is computing.
+The PC can process about 9,300 pairs a second for matches. For a million pairs, that's about 2 minutes. The program will print out how many pairs it is computing.
 
 ## Algorithm
 These are the high-level steps in the algorithm.
