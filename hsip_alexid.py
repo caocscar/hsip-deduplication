@@ -5,10 +5,10 @@ Created on Fri Aug  3 13:30:47 2018
 @author: caoa
 """
 import pandas as pd
-import time
 import recordlinkage as rl
 from collections import defaultdict
 import argparse
+import time
 import sys
 
 pd.options.display.max_rows = 16
@@ -20,9 +20,10 @@ parser = argparse.ArgumentParser(description=desc)
 parser.add_argument('-f','--filename', type=str, help='name of Excel file')
 parser.add_argument('-t','--threshold', type=float, default=0.85, help='threshold to use for string match using Jaro-Winkler distance')
 args = parser.parse_args()
+args.filename = '1 HSIP_Data_File-December_Copy.xlsx'
 
 if not args.filename:
-    print("You need to supply an --filename argument")
+    print("You need to supply a --filename argument")
     sys.exit()
     
 filename = args.filename
@@ -33,26 +34,40 @@ df_raw.columns = ['hsip', 'sid', 'name', 'email', 'ssn',
               'updated','status']
 rules = pd.read_csv('rules.txt', sep='|')
    
-#%%
-# invalid entries (two columns of dummies can be removed)
+#%% Filter dataset based on rules.txt
 rules_dict = defaultdict(list)
 for col, rule in rules.groupby('column'):
     rules_dict[col] = rule['value'].tolist()
 
 list_k = []   
-for col,invalid_entries in rules_dict.items():
-    list_k.append( (df_raw[col].isin(invalid_entries) | df_raw[col].isnull()).astype(int) )
-keep = pd.concat(list_k, axis=1)
-keep['full_address'] = keep['address_1'] + keep['city'] + keep['postal']
-keep['full_address'] = keep['full_address'].apply(lambda x: min(x,1))
-keep['total'] = keep['name'] + keep['ssn'] + keep['full_address']
-keep_rows = keep['total'] < 2
+for col, invalid_entries in rules_dict.items():
+    rule1 = df_raw[col].isin(invalid_entries) | df_raw[col].isnull()
+    if col == 'ssn':
+        rule2 = df_raw['ssn'].str.startswith('11111')
+        valid = ~(rule1 | rule2)
+    else:
+        valid = ~rule1
+    list_k.append(valid)
+columns = pd.concat(list_k, axis=1)
+columns = columns.astype(int)
+
+# special address handling
+df_address = columns[['address_1','city','postal']]
+df_address['address_score'] = 0.6*df_address['address_1'] + 0.4*df_address['city'] + 0.4*df_address['postal']
+
+score = columns[['name','ssn']]
+score['address'] = df_address['address_score']
+score['total'] = score['name'] + score['ssn'] + score['address']
+
+keep_rows = score['total'] >= 2
 df = df_raw[keep_rows].reset_index(drop=True)
 
 # data cleanup
 df = df[df['amt'] > 0]
+df['address_1'] = df['address_1'].str.replace(' ','').str.lower()
+df['name'] = df['name'].str.lower()
 df['n'] = df['name'].apply(lambda x: len(x.split()) )
-names = df['name'].str.split(' ', 2, expand=True)
+names = df['name'].str.split(' ', expand=True, n=2)
 names.columns = ['first','middle','last']
 df = df.merge(names, left_index=True, right_index=True)
 

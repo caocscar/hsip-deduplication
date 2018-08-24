@@ -1,12 +1,38 @@
 column|value
-ssn|111111111
-ssn|999999999
+address_1|1
+address_1|11
+address_1|111
+address_1|1111
+address_1|1111 MAIN
 address_1|1111 MAIN ST
+address_1|1111 MIAN
+address_1|1112 MAIN ST
+address_1|1113 MAIN ST
+address_1|1114 MAIN ST
+address_1|1115 MAIN ST
+address_1|1116 MAIN ST
+address_1|1117 MAIN ST
+address_1|1118 MAIN ST
+address_1|1119 MAIN ST
+city|ANYTOWN
+city|ANYWHER
 city|ANYWHERE
-postal|11111
-name|JOHN DOE
 name|AMAZON
 name|GIFT CARD
-name|UNKNOWN
 name|ILLEGIBLE
+name|JOHN DOE
+name|UNKNOWN
 name|UOFMPARTICIPANT
+postal|11110
+postal|11111
+postal|11112
+postal|11113
+postal|11114
+postal|11115
+postal|11116
+postal|11117
+postal|11118
+postal|11119
+ssn|111111111
+ssn|123456789
+ssn|999999999
