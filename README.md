@@ -30,15 +30,14 @@ These are the high-level steps in the algorithm.
 1. Reads in dataset from "Sheet 1" in Excel file
 2. Read in [rules.txt](rules.txt) that contains a list of invalid entries
 3. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**
-~~4. Removes rows that have an amount ≤ 0~~
-5. Convert address to lowercase and remove spaces for matching
-6. Convert name to lowercase for matching
-7. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
-8. Sets up rules for matching (see [Matching section](#matching) below)
-9. Performs matches using blocking
-10. Assigns an `alexid` to each individual
-11. Tabulate total amount for each indivudal
-12. Write original dataset with two new columns (`alexid` and `total`) to xlsx
+4. Convert address to lowercase and remove spaces for matching
+5. Convert name to lowercase for matching
+6. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
+7. Sets up rules for matching (see [Matching section](#matching) below)
+8. Performs matches using blocking
+9. Assigns an `alexid` to each individual
+10. Tabulate total amount for each indivudal
+11. Write original dataset with two new columns (`alexid` and `total`) to xlsx
 
 The source code can be found [here](hsip_alexid.py). There are other minor details in the code that I didn't mention. 
 
