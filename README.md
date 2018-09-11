@@ -34,7 +34,7 @@ These are the high-level steps in the algorithm.
 5. Convert name to lowercase for matching
 6. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
 7. Sets up rules for matching (see [Matching section](#matching) below)
-8. Performs matches using blocking
+8. Performs two rounds of matching using blocking (Rd 1: **last name**, Rd 2: **ssn**)
 9. Assigns an `alexid` to each individual
 10. Tabulate total amount for each indivudal
 11. Write original dataset with two new columns (`alexid` and `total`) to xlsx
