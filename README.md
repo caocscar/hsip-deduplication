@@ -33,9 +33,10 @@ These are the high-level steps in the algorithm.
 4. Convert address to lowercase and remove spaces for matching
 5. Convert name to lowercase for matching
 6. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
-7. Sets up rules for matching (see [Matching section](#matching) below)
-8. Performs two rounds of matching using blocking (Rd 1: **last name**, Rd 2: **ssn**)
-9. Assigns an `alexid` to each individual
+7. Created **initials** column from **first** and **last** name
+7. Define function with rules for matching (see [Matching section](#matching) below)
+8. Performs four rounds of matching using these blocking elements (Rd1: **ssn**, Rd2: **address**, Rd3:**last** & **initials**, Rd4: **first**, **initials**)
+9. Assigns an `alexid` to each individual using network's connected components
 10. Tabulate total amount for each indivudal
 11. Write original dataset with two new columns (`alexid` and `total`) to xlsx
 
