@@ -6,6 +6,7 @@ Created on Fri Aug  3 13:30:47 2018
 """
 import pandas as pd
 import recordlinkage as rl
+import networkx as nx
 from collections import defaultdict
 import argparse
 import time
@@ -127,24 +128,23 @@ for block in blocks:
 
 scores = pd.concat(pair_score, ignore_index=True, sort=False)
 matches = scores[scores['total'] >= 2]
-matches.reset_index(inplace=True)
+matches.reset_index(drop=True, inplace=True)
 
-#%% assigns id to each person based on match
+#%% assigns id to each person based on a graph connected components
+G = nx.Graph()
+edgelist = list(zip(matches['rec1'],matches['rec2']))
+G.add_edges_from(edgelist)
+cc = list(nx.connected_components(G))
 labels = {}
-sid = 1
-for i in range(matches.shape[0]):
-    if matches.at[i,'rec1'] in labels:
-        labels[matches.at[i,'rec2']] = labels[matches.at[i,'rec1']]
-    else:
-        labels[matches.at[i,'rec1']] = sid
-        labels[matches.at[i,'rec2']] = sid
-        sid += 1
-pid = pd.DataFrame.from_dict(labels, orient='index')
-pid.columns = ['alexid']
+for sid, pids in enumerate(cc, start=1):
+    for pid in pids:
+        labels[pid] = sid
+personid = pd.DataFrame.from_dict(labels, orient='index')
+personid.columns = ['alexid']
 maxid = sid + 1
 
 #%%
-dakota = df.merge(pid, how='left', left_index=True, right_index=True)
+dakota = df.merge(personid, how='left', left_index=True, right_index=True)
 alex = dakota[dakota['alexid'].notnull()]
 singletons = dakota[dakota['alexid'].isnull()]
 singletons.dropna(axis=1, how='all', inplace=True)
