@@ -19,7 +19,7 @@ pd.options.mode.chained_assignment = None # suppress SettingWithCopyWarning
 desc = 'HSIP person record linkage algorithm'
 parser = argparse.ArgumentParser(description=desc)
 parser.add_argument('-f','--filename', type=str, help='name of Excel file')
-parser.add_argument('-t','--threshold', type=float, default=0.85, help='threshold to use for string match using Jaro-Winkler distance')
+parser.add_argument('-t','--threshold', type=float, default=0.82, help='threshold to use for string match using Jaro-Winkler distance')
 args = parser.parse_args()
 args.filename = '1 HSIP_Data_File-December_Copy.xlsx'
 threshold = args.threshold
@@ -69,7 +69,11 @@ score['total'] = score['name'] + score['ssn'] + score['address']
 keep_rows = score['total'] >= 2
 df = df_raw[keep_rows].reset_index(drop=True)
 
-# data cleanup
+#%% data wrangling for matching purposes
+# swap c/o address_1 with address_2
+careof = df['address_1'].apply(lambda x: True if 'C/O' in x else False)
+df.loc[careof,['address_1','address_2']] = df.loc[careof,['address_2','address_1']].values
+
 df['address_'] = df['address_1'].str.replace(' ','').str.lower()
 df['name'] = df['name'].str.lower()
 df['n'] = df['name'].apply(lambda x: len(x.split()) )
@@ -95,7 +99,7 @@ def get_index_pairs_rules(df, columns):
     rules = rl.Compare()
     rules.string('first', 'first', label='first', method='jarowinkler', threshold=threshold)
     rules.string('last', 'last', label='last', method='jarowinkler', threshold=threshold)
-    rules.string('ssn', 'ssn', label='ssn', method='jarowinkler', threshold=threshold)
+    rules.string('ssn', 'ssn', label='ssn', method='damerau_levenshtein', threshold=0.77)
     rules.string('address_', 'address_', label='address_', method='jarowinkler', threshold=threshold)
     for col in columns:
         rules.exact(col, col, label=col)
@@ -103,9 +107,10 @@ def get_index_pairs_rules(df, columns):
     idx_pairs = indexer.index(df)
     return idx_pairs, rules
 
-def score_calculation(df):    
-    df['name'] = 0.5*df['first'] + 0.5*df['last']
-    df = df[['name','ssn','address_']]       
+def score_calculation2(df):    
+    df = df[['first','last','ssn','address_']]
+    df['ssn'] = df['ssn']*2
+    df['address_'] = df['address_']*2
     df['total'] = df.sum(axis=1)
     df.reset_index(inplace=True)
     df.rename(columns={'level_0':'rec1','level_1':'rec2'}, inplace=True)
@@ -119,22 +124,21 @@ for block in blocks:
     idx_pairs, rules = get_index_pairs_rules(df_linkage, block)
     print('{} blocking - Pairs to compare: {:,}'.format(block, len(idx_pairs)) )
     t1 = time.time()
-    computation = rules.compute(idx_pairs, df_linkage)
+    features = rules.compute(idx_pairs, df_linkage)
     t2 = time.time()
     print('Matching took {:.1f} sec'.format(t2-t1) )
     print('Pairs per second: {:.0f}'.format(len(idx_pairs)/(t2-t1)))
-    features = computation.copy()
-    pair_score.append(score_calculation(features))
+    pair_score.append(score_calculation2(features))
 
 scores = pd.concat(pair_score, ignore_index=True, sort=False)
-matches = scores[scores['total'] >= 2]
+matches = scores[scores['total'] >= 3]
 matches.reset_index(drop=True, inplace=True)
 
 #%% assigns id to each person based on a graph connected components
 G = nx.Graph()
 edgelist = list(zip(matches['rec1'],matches['rec2']))
 G.add_edges_from(edgelist)
-cc = list(nx.connected_components(G))
+cc = nx.connected_components(G)
 labels = {}
 for sid, pids in enumerate(cc, start=1):
     for pid in pids:
@@ -146,18 +150,35 @@ maxid = sid + 1
 #%%
 dakota = df.merge(personid, how='left', left_index=True, right_index=True)
 alex = dakota[dakota['alexid'].notnull()]
+alex['alexid'] = alex['alexid'].astype(int)
 singletons = dakota[dakota['alexid'].isnull()]
 singletons.dropna(axis=1, how='all', inplace=True)
 
 singletons['alexid'] = range(maxid, maxid+singletons.shape[0])
-lily = pd.concat([alex, singletons])
-lily['alexid'] = lily['alexid'].astype(int)
-lily.sort_values('alexid', inplace=True)
+singletons['total'] = singletons['amt']
+singletons['record'] = 1
+singletons['name_ct'] = 1
+singletons['ssn_ct'] = 1
+singletons['address_ct'] = 1
 
-ppl = lily.groupby('alexid')['amt'].sum().to_frame()
-ppl.columns = ['total']
-master = lily.merge(ppl, left_on='alexid', right_index=True)
-master.sort_values(['total','alexid'], ascending=[False,True], inplace=True)
+#%%
+t3 = time.time()
+list_df = [singletons]
+for alexid, data in alex.groupby('alexid'):
+    data['total'] = data['amt'].sum()
+    data.sort_values('date', ascending=False, inplace=True)
+    data['record'] = range(1,1+data.shape[0])
+    data['name_ct'] = len(set(data['name']))
+    data['ssn_ct'] = len(set(data['ssn']))
+    data['address_ct'] = len(set(data['address_1']))
+    list_df.append(data)
+t5 = time.time()
+master = pd.concat(list_df)
+t4 = time.time()
+print('Adding MetaData {:.1f}s'.format(t4-t3))
+
+#%%
+master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
 nodupes = master.drop_duplicates(['alexid'])
 f1099 = nodupes[nodupes['total'] > 600]
 
@@ -187,6 +208,7 @@ aset = set(nodupes_['key'])
 
 diffset1 = aset.difference(kset)
 diffset2 = kset.difference(aset)
+print(len(diffset1),len(diffset2))
 
 #%%
 cfile = 'differences.xlsx'
