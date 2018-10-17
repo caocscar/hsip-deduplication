@@ -71,10 +71,52 @@ df = df_raw[keep_rows].reset_index(drop=True)
 
 #%% data wrangling for matching purposes
 # swap c/o address_1 with address_2
-careof = df['address_1'].apply(lambda x: True if 'C/O' in x else False)
+careof = df['address_1'].apply(lambda x: 'C/O' in x)
 df.loc[careof,['address_1','address_2']] = df.loc[careof,['address_2','address_1']].values
+# add address_1 and address_2 for numbers only address_1
+numbersonly = df['address_1'].str.isnumeric()
+df.loc[numbersonly,'address_1'] = df.loc[numbersonly,'address_1'] + ' ' + df.loc[numbersonly,'address_2']
 
-df['address_'] = df['address_1'].str.replace(' ','').str.lower()
+# remove common trailing address descriptions to increase # of matched pairs
+fetype = ['ST','DR','RD','AVE','CT','LN','BLVD','CIR','WAY','TRL',
+          'PL','SE','HWY','PKWY','NE','SW','E','W','N','S',
+          'NW','AVENUE','HTS','CTR','LANE','DRIVE','CIRCLE','STREET','CRES','SOUTH',
+          'ROAD','PT','TR','TRAIL','WEST','HEIGHTS','COURT','CR','EAST',
+          'NORTH','SQ','APT',
+]
+# standardize suffixes to increase # of matched pairs
+suffix = [('SOUTH','S'),
+('NORTH','N'),
+('EAST','E'),
+('WEST','W'),
+('NORTHWEST','NW'),
+('SOUTHWEST','SW'),
+('NORTHEAST','NE'),
+('SOUTHEAST','SE'),
+('LANE','LN'),
+('DRIVE','DR'),
+('CIRCLE','CIR'),
+('AVENUE','AVE'),
+('STREET','ST'),
+('COURT','CT'),
+('ROAD','RD'),
+('TRAIL','TRL'),
+('TR','TRL'),
+('CRESCENT','CRES'),
+('HEIGHTS','HTS'),
+('HIGHWAY','HWY'),
+('BOULEVARD','BLVD'),
+('LAKE','LK'),
+('PARKWAY','PKWY'),
+('PLACE','PL'),
+('CENTER','CTR'),
+('POINT','PT'),
+('SQUARE','SQ'),
+]
+suffix_dict = {rf'\b{x[0]}\b':x[1] for x in suffix}
+
+df['address_'] = df['address_1'].replace(suffix_dict, regex=True)
+df['address_'] = df['address_'].str.replace(' ','').str.lower()
 df['name'] = df['name'].str.lower()
 df['n'] = df['name'].apply(lambda x: len(x.split()) )
 names = df['name'].str.split(' ', expand=True, n=2)
@@ -107,10 +149,9 @@ def get_index_pairs_rules(df, columns):
     idx_pairs = indexer.index(df)
     return idx_pairs, rules
 
-def score_calculation2(df):    
-    df = df[['first','last','ssn','address_']]
-    df['ssn'] = df['ssn']*2
-    df['address_'] = df['address_']*2
+def score_calculation(df):    
+    df['name'] = 0.5*df['first'] + 0.5*df['last']
+    df = df[['name','ssn','address_']]       
     df['total'] = df.sum(axis=1)
     df.reset_index(inplace=True)
     df.rename(columns={'level_0':'rec1','level_1':'rec2'}, inplace=True)
@@ -122,16 +163,15 @@ blocks = ['ssn','address_',['last','initials'],['first','initials']]
 pair_score = []
 for block in blocks:
     idx_pairs, rules = get_index_pairs_rules(df_linkage, block)
-    print('{} blocking - Pairs to compare: {:,}'.format(block, len(idx_pairs)) )
     t1 = time.time()
     features = rules.compute(idx_pairs, df_linkage)
     t2 = time.time()
-    print('Matching took {:.1f} sec'.format(t2-t1) )
+    print(f'{block} Block Matching took {t2-t1:.1f} sec' )
     print('Pairs per second: {:.0f}'.format(len(idx_pairs)/(t2-t1)))
-    pair_score.append(score_calculation2(features))
+    pair_score.append(score_calculation(features))
 
 scores = pd.concat(pair_score, ignore_index=True, sort=False)
-matches = scores[scores['total'] >= 3]
+matches = scores[scores['total'] >= 2]
 matches.reset_index(drop=True, inplace=True)
 
 #%% assigns id to each person based on a graph connected components
@@ -153,73 +193,86 @@ alex = dakota[dakota['alexid'].notnull()]
 alex['alexid'] = alex['alexid'].astype(int)
 singletons = dakota[dakota['alexid'].isnull()]
 singletons.dropna(axis=1, how='all', inplace=True)
-
 singletons['alexid'] = range(maxid, maxid+singletons.shape[0])
-singletons['total'] = singletons['amt']
-singletons['record'] = 1
-singletons['name_ct'] = 1
-singletons['ssn_ct'] = 1
-singletons['address_ct'] = 1
 
 #%%
+def get_count(data):
+    name_ct = len(set(data['name']))
+    ssn_ct = len(set(data['ssn']))
+    address_ct = len(set(data['address_']))
+    return (name_ct, ssn_ct, address_ct)
+
 t3 = time.time()
-list_df = [singletons]
-for alexid, data in alex.groupby('alexid'):
-    data['total'] = data['amt'].sum()
-    data.sort_values('date', ascending=False, inplace=True)
-    data['record'] = range(1,1+data.shape[0])
-    data['name_ct'] = len(set(data['name']))
-    data['ssn_ct'] = len(set(data['ssn']))
-    data['address_ct'] = len(set(data['address_1']))
-    list_df.append(data)
-t5 = time.time()
-master = pd.concat(list_df)
+master = pd.concat([alex, singletons], ignore_index=True)
+total = master.groupby('alexid')['amt'].sum().to_frame()
+total.columns = ['total']
+cts = master.groupby('alexid').apply(get_count)
+counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','ssn_ct','address_ct'])
+counts['ct_sum'] = counts.sum(axis=1)
+total_cts = pd.concat([total, counts], axis=1)
+master = master.merge(total_cts, how='left', left_on='alexid', right_index=True)
+master = master.sort_values(['alexid','date'], ascending=[True,False]).reset_index()
+master['record'] = master.groupby('alexid').cumcount() + 1
 t4 = time.time()
-print('Adding MetaData {:.1f}s'.format(t4-t3))
+print(f'Adding MetaData {t4-t3:.1f}s')
 
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
-nodupes = master.drop_duplicates(['alexid'])
-f1099 = nodupes[nodupes['total'] > 600]
+#nodupes = master.drop_duplicates(['alexid'])
+#f1099 = nodupes[nodupes['total'] > 600]
+
+#%%
+ssn_alexid = master.groupby('ssn')['alexid'].nunique()
+ssn_suspects = ssn_alexid[ssn_alexid > 1]
+print(ssn_suspects.shape) #33
+
+name_alexid = master.groupby('name')['alexid'].nunique()
+name_suspects = name_alexid[name_alexid > 1]
+print(name_suspects.shape) #1781
+
+address_alexid = master.groupby('address_')['alexid'].nunique()
+address_suspects = address_alexid[address_alexid > 1]
+print(address_suspects.shape) #4239
 
 #%%
 outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(outputfile)
 xlsx = master.drop(['address_','n','first','middle','last','initials'], axis=1)
+xlsx['name'] = xlsx['name'].str.upper()
 xlsx.to_excel(writer, 'alexid', index=False)
 df_raw[~keep_rows].to_excel(writer, 'invalid_rows', index=False)
 writer.save()
 print('{} created'.format(outputfile))
 
 #%%
-kathy = pd.read_excel('2nd Run Differences.xlsx', sheet_name='Dec Rollup')
-kathy['key'] = kathy['HSIP Control No'].astype(str) + '_' + kathy['Subject#'].astype(str)
-kathy.sort_values('key', inplace=True)
-kathy.reset_index(drop=True, inplace=True)
-knodupes = kathy.drop_duplicates('Formatted SSN')
-kset = set(knodupes['key'])
-
-kmaster = master.copy()
-kmaster['key'] = kmaster['hsip'].astype(str) + '_' + kmaster['sid'].astype(str)
-kmaster.sort_values('key', inplace=True)
-kmaster.reset_index(drop=True, inplace=True)
-nodupes_ = kmaster.drop_duplicates(['alexid'])
-aset = set(nodupes_['key'])
-
-diffset1 = aset.difference(kset)
-diffset2 = kset.difference(aset)
-print(len(diffset1),len(diffset2))
-
-#%%
-cfile = 'differences.xlsx'
-writer = pd.ExcelWriter(cfile)
-xlsx = nodupes_.drop(['address_','n','first','middle','last','initials'], axis=1)
-xlsx = xlsx[xlsx['key'].isin(diffset1)]
-xlsx.sort_values('ssn', ascending=False, inplace=True)
-xlsx.to_excel(writer, 'alex diff kathy', index=False)
-xlsx2 = knodupes[knodupes['key'].isin(diffset2)]
-xlsx2 = xlsx2.merge(kmaster[['key','alexid']], how='left', on='key')
-xlsx2.sort_values('alexid', inplace=True)
-xlsx2.to_excel(writer, 'kathy diff alex', index=False)
-writer.save()
-print('{} created'.format(cfile))
+#kathy = pd.read_excel('2nd Run Differences.xlsx', sheet_name='Dec Rollup')
+#kathy['key'] = kathy['HSIP Control No'].astype(str) + '_' + kathy['Subject#'].astype(str)
+#kathy.sort_values('key', inplace=True)
+#kathy.reset_index(drop=True, inplace=True)
+#knodupes = kathy.drop_duplicates('Formatted SSN')
+#kset = set(knodupes['key'])
+#
+#kmaster = master.copy()
+#kmaster['key'] = kmaster['hsip'].astype(str) + '_' + kmaster['sid'].astype(str)
+#kmaster.sort_values('key', inplace=True)
+#kmaster.reset_index(drop=True, inplace=True)
+#nodupes_ = kmaster.drop_duplicates(['alexid'])
+#aset = set(nodupes_['key'])
+#
+#diffset1 = aset.difference(kset)
+#diffset2 = kset.difference(aset)
+#print(len(diffset1),len(diffset2))
+#
+##%%
+#cfile = 'differences.xlsx'
+#writer = pd.ExcelWriter(cfile)
+#xlsx = nodupes_.drop(['address_','n','first','middle','last','initials'], axis=1)
+#xlsx = xlsx[xlsx['key'].isin(diffset1)]
+#xlsx.sort_values('ssn', ascending=False, inplace=True)
+#xlsx.to_excel(writer, 'alex diff kathy', index=False)
+#xlsx2 = knodupes[knodupes['key'].isin(diffset2)]
+#xlsx2 = xlsx2.merge(kmaster[['key','alexid']], how='left', on='key')
+#xlsx2.sort_values('alexid', inplace=True)
+#xlsx2.to_excel(writer, 'kathy diff alex', index=False)
+#writer.save()
+#print('{} created'.format(cfile))
