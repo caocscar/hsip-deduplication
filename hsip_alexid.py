@@ -19,38 +19,61 @@ pd.options.mode.chained_assignment = None # suppress SettingWithCopyWarning
 desc = 'HSIP person record linkage algorithm'
 parser = argparse.ArgumentParser(description=desc)
 parser.add_argument('-f','--filename', type=str, help='name of Excel file')
-parser.add_argument('-t','--threshold', type=float, default=0.82, help='threshold to use for string match using Jaro-Winkler distance')
 args = parser.parse_args()
 args.filename = '1 HSIP_Data_File-December_Copy.xlsx'
-threshold = args.threshold
 
+#%%
+def standardize_ssn(df):
+    if df['ssn'].dtype == 'float':
+        tf = df['ssn'].notnull()
+        df.loc[tf,'ssn'] = df.loc[tf,'ssn'].apply(lambda x: f'{x:.0f}')
+    return df
+    
 if not args.filename:
     print("You need to supply a --filename argument")
     sys.exit()
     
 filename = args.filename
-df_raw = pd.read_excel(filename, sheet=0)
-df_raw.columns = ['hsip', 'sid', 'name', 'email', 'ssn', 
+df_raw = pd.read_excel(filename, sheet_name=0)
+
+cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
+       'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
+       'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
+newcols = ['hsip', 'sid', 'name', 'email', 'ssn', 
               'address_1', 'address_2', 'city', 'country', 'state',
               'postal', 'method', 'date', 'amt', 'entered',
               'updated','status']
-rules = pd.read_csv('rules.txt', sep='|')
-   
+colnames = dict(zip(cols,newcols))
+df_raw.rename(columns=colnames, inplace=True)
+df_raw = standardize_ssn(df_raw)
+
+Rules = pd.read_csv('rules.txt', sep='|')
+
+#%% additional files
+df_extra = pd.read_excel('JAN_MAR_HSIP_AWARD_MSTR_COPY.xlsx', sheet_name=None)
+list_df = []
+for df in df_extra.values():
+    list_df.append(df)
+df_ext = pd.concat(list_df, ignore_index=True, sort=False)
+df_ext.dropna(axis=1, how='all', inplace=True)
+df_ext = standardize_ssn(df_ext)
+    
+df_rawext = pd.concat([df_raw, df_ext], ignore_index=True)
+df_rawext['address_1'].fillna('', inplace=True)
+
 #%% Filter dataset based on rules.txt
-ssn_list = list(rules.loc[rules['column'] == 'ssn','value'])
-ssn_dict = {}
-for ssn in ssn_list:
-    ssn_dict[ssn] = None
+ssn_list = list(Rules.loc[Rules['column'] == 'ssn','value'])
+ssn_dict = {ssn:None for ssn in ssn_list}
 
 rules_dict = defaultdict(list)
-for col, rule in rules.groupby('column'):
+for col, rule in Rules.groupby('column'):
     rules_dict[col] = rule['value'].tolist()
 
 list_k = []   
 for col, invalid_entries in rules_dict.items():
-    rule1 = df_raw[col].isin(invalid_entries) | df_raw[col].isnull()
+    rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
     if col == 'ssn':
-        rule2 = df_raw['ssn'].str.startswith('11111')
+        rule2 = df_rawext['ssn'].str.startswith('11111')
         valid = ~(rule1 | rule2)
     else:
         valid = ~rule1
@@ -67,7 +90,7 @@ score['address'] = df_address['address_score']
 score['total'] = score['name'] + score['ssn'] + score['address']
 
 keep_rows = score['total'] >= 2
-df = df_raw[keep_rows].reset_index(drop=True)
+df = df_rawext[keep_rows].reset_index(drop=True)
 
 #%% data wrangling for matching purposes
 # swap c/o address_1 with address_2
@@ -77,41 +100,14 @@ df.loc[careof,['address_1','address_2']] = df.loc[careof,['address_2','address_1
 numbersonly = df['address_1'].str.isnumeric()
 df.loc[numbersonly,'address_1'] = df.loc[numbersonly,'address_1'] + ' ' + df.loc[numbersonly,'address_2']
 
-# remove common trailing address descriptions to increase # of matched pairs
-fetype = ['ST','DR','RD','AVE','CT','LN','BLVD','CIR','WAY','TRL',
-          'PL','SE','HWY','PKWY','NE','SW','E','W','N','S',
-          'NW','AVENUE','HTS','CTR','LANE','DRIVE','CIRCLE','STREET','CRES','SOUTH',
-          'ROAD','PT','TR','TRAIL','WEST','HEIGHTS','COURT','CR','EAST',
-          'NORTH','SQ','APT',
-]
 # standardize suffixes to increase # of matched pairs
-suffix = [('SOUTH','S'),
-('NORTH','N'),
-('EAST','E'),
-('WEST','W'),
-('NORTHWEST','NW'),
-('SOUTHWEST','SW'),
-('NORTHEAST','NE'),
-('SOUTHEAST','SE'),
-('LANE','LN'),
-('DRIVE','DR'),
-('CIRCLE','CIR'),
-('AVENUE','AVE'),
-('STREET','ST'),
-('COURT','CT'),
-('ROAD','RD'),
-('TRAIL','TRL'),
-('TR','TRL'),
-('CRESCENT','CRES'),
-('HEIGHTS','HTS'),
-('HIGHWAY','HWY'),
-('BOULEVARD','BLVD'),
-('LAKE','LK'),
-('PARKWAY','PKWY'),
-('PLACE','PL'),
-('CENTER','CTR'),
-('POINT','PT'),
-('SQUARE','SQ'),
+suffix = [('SOUTH','S'),('NORTH','N'),('EAST','E'),('WEST','W'),
+('NORTHWEST','NW'),('SOUTHWEST','SW'),('NORTHEAST','NE'),('SOUTHEAST','SE'),
+('AVENUE','AVE'),('BOULEVARD','BLVD'),('CENTER','CTR'),('CIRCLE','CIR'),
+('COURT','CT'),('CRESCENT','CRES'),('DRIVE','DR'),('HEIGHTS','HTS'),
+('HIGHWAY','HWY'),('LANE','LN'),('LAKE','LK'),('PARKWAY','PKWY'),
+('PLACE','PL'),('POINT','PT'),('ROAD','RD'),('SQUARE','SQ'),
+('STREET','ST'),('TR','TRL'),('TRAIL','TRL'),
 ]
 suffix_dict = {rf'\b{x[0]}\b':x[1] for x in suffix}
 
@@ -123,11 +119,9 @@ names = df['name'].str.split(' ', expand=True, n=2)
 names.columns = ['first','middle','last']
 df = df.merge(names, left_index=True, right_index=True)
 
-tf = (df['n'] == 2)
-df1 = df[~tf]
-df2 = df[tf]
-df2.rename(columns={'last':'middle','middle':'last'}, inplace=True)
-df = pd.concat([df1, df2], sort=False)
+# swap middle and last names for ppl with only two names
+twonamesonly = (df['n'] == 2)
+df.loc[twonamesonly,['last','middle']] = df.loc[twonamesonly,['middle','last']].values
 
 #%% create dataframe for linking
 df['initials'] = df['first'].str[0] + df['last'].str[0]
@@ -138,6 +132,7 @@ df_linkage.replace({'ssn':ssn_dict}, inplace=True)
 def get_index_pairs_rules(df, columns):
     if isinstance(columns, str):
         columns = [columns]
+    threshold = 0.82
     rules = rl.Compare()
     rules.string('first', 'first', label='first', method='jarowinkler', threshold=threshold)
     rules.string('last', 'last', label='last', method='jarowinkler', threshold=threshold)
@@ -211,68 +206,54 @@ counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','ssn_ct'
 counts['ct_sum'] = counts.sum(axis=1)
 total_cts = pd.concat([total, counts], axis=1)
 master = master.merge(total_cts, how='left', left_on='alexid', right_index=True)
-master = master.sort_values(['alexid','date'], ascending=[True,False]).reset_index()
+master = master.sort_values(['alexid','date'], ascending=[True,False])
 master['record'] = master.groupby('alexid').cumcount() + 1
 t4 = time.time()
 print(f'Adding MetaData {t4-t3:.1f}s')
 
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
-#nodupes = master.drop_duplicates(['alexid'])
-#f1099 = nodupes[nodupes['total'] > 600]
-
-#%%
-ssn_alexid = master.groupby('ssn')['alexid'].nunique()
-ssn_suspects = ssn_alexid[ssn_alexid > 1]
-print(ssn_suspects.shape) #33
-
-name_alexid = master.groupby('name')['alexid'].nunique()
-name_suspects = name_alexid[name_alexid > 1]
-print(name_suspects.shape) #1781
-
-address_alexid = master.groupby('address_')['alexid'].nunique()
-address_suspects = address_alexid[address_alexid > 1]
-print(address_suspects.shape) #4239
 
 #%%
 outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(outputfile)
-xlsx = master.drop(['address_','n','first','middle','last','initials'], axis=1)
+xlsx = master.drop(['n','first','middle','last','initials'], axis=1)
 xlsx['name'] = xlsx['name'].str.upper()
+
+#%% Identify possible false negatives
+address_alexid = xlsx.groupby('address_')['alexid'].nunique()
+address_suspects = address_alexid[address_alexid > 1]
+address_list = list(Rules.loc[Rules['column'] == 'name','value'])
+address_set = set(address_suspects.index) - set(address_list)
+wb3 = xlsx[xlsx['address_'].isin(address_set)]
+wb3.sort_values(['address_','alexid'], inplace=True)
+
+wb3.drop('address_', axis=1, inplace=True)
+xlsx.drop('address_', axis=1, inplace=True)
+
+ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
+ssn_suspects = ssn_alexid[ssn_alexid > 1]
+ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
+wb1 = xlsx[xlsx['ssn'].isin(ssn_set)]
+wb1.sort_values(['ssn','alexid'], inplace=True)
+
+name_alexid = xlsx.groupby('name')['alexid'].nunique()
+name_suspects = name_alexid[name_alexid > 1]
+name_list = list(Rules.loc[Rules['column'] == 'name','value'])
+name_set = set(name_suspects.index) - set(name_list)
+wb2 = xlsx[xlsx['name'].isin(name_set)]
+wb2.sort_values(['name','alexid'], inplace=True)
+
+print(ssn_suspects.shape) #35
+print(name_suspects.shape) #2002
+print(address_suspects.shape) #4673
+
+#%%
 xlsx.to_excel(writer, 'alexid', index=False)
-df_raw[~keep_rows].to_excel(writer, 'invalid_rows', index=False)
+df_rawext[~keep_rows].to_excel(writer, 'invalid_rows', index=False)
+wb1.to_excel(writer, 'same_ssn_diff_alexid', index=False)
+wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
+wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
 writer.save()
 print('{} created'.format(outputfile))
 
-#%%
-#kathy = pd.read_excel('2nd Run Differences.xlsx', sheet_name='Dec Rollup')
-#kathy['key'] = kathy['HSIP Control No'].astype(str) + '_' + kathy['Subject#'].astype(str)
-#kathy.sort_values('key', inplace=True)
-#kathy.reset_index(drop=True, inplace=True)
-#knodupes = kathy.drop_duplicates('Formatted SSN')
-#kset = set(knodupes['key'])
-#
-#kmaster = master.copy()
-#kmaster['key'] = kmaster['hsip'].astype(str) + '_' + kmaster['sid'].astype(str)
-#kmaster.sort_values('key', inplace=True)
-#kmaster.reset_index(drop=True, inplace=True)
-#nodupes_ = kmaster.drop_duplicates(['alexid'])
-#aset = set(nodupes_['key'])
-#
-#diffset1 = aset.difference(kset)
-#diffset2 = kset.difference(aset)
-#print(len(diffset1),len(diffset2))
-#
-##%%
-#cfile = 'differences.xlsx'
-#writer = pd.ExcelWriter(cfile)
-#xlsx = nodupes_.drop(['address_','n','first','middle','last','initials'], axis=1)
-#xlsx = xlsx[xlsx['key'].isin(diffset1)]
-#xlsx.sort_values('ssn', ascending=False, inplace=True)
-#xlsx.to_excel(writer, 'alex diff kathy', index=False)
-#xlsx2 = knodupes[knodupes['key'].isin(diffset2)]
-#xlsx2 = xlsx2.merge(kmaster[['key','alexid']], how='left', on='key')
-#xlsx2.sort_values('alexid', inplace=True)
-#xlsx2.to_excel(writer, 'kathy diff alex', index=False)
-#writer.save()
-#print('{} created'.format(cfile))
