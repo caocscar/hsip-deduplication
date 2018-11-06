@@ -26,23 +26,25 @@ The PC can process about 10,000 pairs a second for matches. For a million pairs,
 
 ## Algorithm
 These are the high-level steps in the algorithm.
-1. Reads in dataset from all Excel files
-2. Add primary key column **uid** for each dataset 
-3. Read in [rules.txt](rules.txt) that contains a list of invalid entries
-3. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**
-4. Swap **address_1** and **address_2** if there is a `C/O` in **address_1**
-5. Add **address_1** and **address_2** if there is only a number in **address_1**
-6. Standardize common address suffixes (e.g. Street to St) and direction (e.g. West to W)
-7. Convert address to lowercase and remove spaces for matching
-8. Convert name to lowercase for matching
-9. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last
-10. Created **initials** column from **first** and **last** name
-11. Define function with rules for matching (see [Matching section](#matching) below)
-12. Performs four rounds of matching using these blocking elements (Rd1: **ssn**, Rd2: **address**, Rd3:**last** & **initials**, Rd4: **first**, **initials**)
-13. Assigns an `alexid` to each individual using network's connected components
-14. Tabulate total amount for each indivudal
-16. Write original dataset with new columns `[uid, alexid, total, name_ct, ssn_ct, address_ct, ct_sum, record]` to xlsx
-17. Write additional sheets for debugging purposes: `invalid_rows`, `same_ssn_diff_alexid`, `same_name_diff_alexid`, `same_address1_diff_alexid` 
+1. Reads in dataset from all Excel files.
+2. Add primary key column **uid** for each dataset.
+3. Read in [rules.txt](rules.txt) that contains a list of invalid entries.
+3. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**.
+4. Swap **address_1** and **address_2** if there is a `C/O` in **address_1**.
+5. Add **address_1** and **address_2** if there is only a number in **address_1**.
+6. Standardize common address suffixes (e.g. Street to St) and direction (e.g. West to W).
+7. Convert address to lowercase and remove spaces for matching.
+8. Convert name to lowercase for matching.
+9. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last.
+10. Created **initials** column from **first** and **last** name.
+11. Define function with rules for matching (see [Matching section](#matching) below).
+12. Performs four rounds of matching using these blocking elements (Rd1: **ssn**, Rd2: **address**, Rd3:**last** & **initials**, Rd4: **first**, **initials**).
+13. Assigns an `alexid` to each individual using the network's connected components.
+14. Tabulate total amount for each indivudal.
+16. Get distinct count of name, ssn, address for each `alexid`. A blank counts as a distinct value.
+17. Enumerate records within each `alexid`.
+16. Write original dataset with new columns `[uid, alexid, total, name_ct, ssn_ct, address_ct, ct_sum, record]` to xlsx.
+17. Write additional sheets for debugging purposes: `invalid_rows`, `same_ssn_diff_alexid`, `same_name_diff_alexid`, `same_address1_diff_alexid`.
 
 The source code can be found [here](hsip_alexid.py). There are other minor details in the code that I didn't mention. 
 
