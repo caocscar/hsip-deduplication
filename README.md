@@ -27,11 +27,11 @@ The PC can process about 10,000 pairs a second for matches. For a million pairs,
 ## Algorithm
 These are the high-level steps in the algorithm.
 1. Reads in dataset from all Excel files
-2. Add primary key column `uid` for each dataset 
+2. Add primary key column **uid** for each dataset 
 3. Read in [rules.txt](rules.txt) that contains a list of invalid entries
 3. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**
-4. Swap `address_1` and `address_2` if there is a `C/O` in `address_1`
-5. Add `address_1` and `address_2` if there is only a number in `address_1`
+4. Swap **address_1** and **address_2** if there is a `C/O` in **address_1**
+5. Add **address_1** and **address_2** if there is only a number in **address_1**
 6. Standardize common address suffixes (e.g. Street to St) and direction (e.g. West to W)
 7. Convert address to lowercase and remove spaces for matching
 8. Convert name to lowercase for matching
