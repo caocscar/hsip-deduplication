@@ -35,7 +35,6 @@ if not args.filename:
     
 filename = args.filename
 df_raw = pd.read_excel(filename, sheet_name=0)
-
 cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
        'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
        'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
@@ -46,13 +45,18 @@ newcols = ['hsip', 'sid', 'name', 'email', 'ssn',
 colnames = dict(zip(cols,newcols))
 df_raw.rename(columns=colnames, inplace=True)
 df_raw = standardize_ssn(df_raw)
+df_raw['uid'] = df_raw.index + 2
+df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>5}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
 
 #%% additional files
 df_extra = pd.read_excel('JAN_MAR_HSIP_AWARD_MSTR_COPY.xlsx', sheet_name=None)
 list_df = []
-for df in df_extra.values():
+sheets = ['HSIPJAN','HSIPMAR','AWARDJAN','AWARDMAR']
+for df, sheet in zip(df_extra.values(), sheets):
+    df['uid'] = df.index + 2
+    df['uid'] = df['uid'].apply(lambda x: f'{sheet}{x:0>5}')
     list_df.append(df)
 df_ext = pd.concat(list_df, ignore_index=True, sort=False)
 df_ext.dropna(axis=1, how='all', inplace=True)
@@ -256,4 +260,5 @@ wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
 wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
 writer.save()
 print('{} created'.format(outputfile))
+
 
