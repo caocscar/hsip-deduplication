@@ -27,6 +27,8 @@ The PC can process about 10,000 pairs a second for matches. For a million pairs,
 ## Algorithm
 These are the high-level steps in the algorithm.
 1. Reads in dataset from all Excel files.
+2. Removed invalid punctuation set from **name** and **address** field.
+3. Moved email addresses from **name** and **address** field to **email** column.
 2. Add primary key column **uid** for each dataset.
 3. Read in [rules.txt](rules.txt) that contains a list of invalid entries.
 3. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**.
