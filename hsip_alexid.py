@@ -11,6 +11,8 @@ from collections import defaultdict
 import argparse
 import time
 import sys
+import string
+import re
 
 pd.options.display.max_rows = 16
 pd.options.display.max_columns = 25
@@ -28,7 +30,29 @@ def standardize_ssn(df):
         tf = df['ssn'].notnull()
         df.loc[tf,'ssn'] = df.loc[tf,'ssn'].apply(lambda x: f'{x:.0f}')
     return df
-    
+
+def standardize_name(df):
+    tf = df['name'].str.contains('@')
+    df.loc[tf,'email'] = df.loc[tf,'name']
+    df.loc[tf,'name'] = ''
+    name_invalid_punctuation = re.sub(r'[-&@]','',string.punctuation)
+    regex1 = re.compile(rf'[{name_invalid_punctuation}]')
+    regex2 = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|DO|MHS|)\b')
+    tmp = df['name'].apply(lambda x: re.sub(regex1, '', x))
+    df['name'] = tmp.apply(lambda x: re.sub(regex2, '', x).strip(' '))
+    df['name'].replace({'': None}, inplace=True)
+    return df
+
+def standardize_address(df):
+    tf = df['address_1'].str.contains('@')
+    df.loc[tf,'email'] = df.loc[tf,'address_1']
+    df.loc[tf,'address_1'] = ''
+    address_invalid_punctuation = re.sub(r'[-&#/@]','',string.punctuation)
+    regex = re.compile(rf'[{address_invalid_punctuation}]')
+    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex, '', x).strip(' ') )
+    df['address_1'].replace({'': None}, inplace=True)
+    return df
+
 if not args.filename:
     print("You need to supply a --filename argument")
     sys.exit()
@@ -45,25 +69,27 @@ newcols = ['hsip', 'sid', 'name', 'email', 'ssn',
 colnames = dict(zip(cols,newcols))
 df_raw.rename(columns=colnames, inplace=True)
 df_raw = standardize_ssn(df_raw)
+df_raw = standardize_name(df_raw)
+df_raw = standardize_address(df_raw)
 df_raw['uid'] = df_raw.index + 2
 df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>5}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
 
 #%% additional files
-df_extra = pd.read_excel('JAN_MAR_HSIP_AWARD_MSTR_COPY.xlsx', sheet_name=None)
-list_df = []
-sheets = ['HSIPJAN','HSIPMAR','AWARDJAN','AWARDMAR']
-for df, sheet in zip(df_extra.values(), sheets):
-    df['uid'] = df.index + 2
-    df['uid'] = df['uid'].apply(lambda x: f'{sheet}{x:0>5}')
-    list_df.append(df)
-df_ext = pd.concat(list_df, ignore_index=True, sort=False)
-df_ext.dropna(axis=1, how='all', inplace=True)
-df_ext = standardize_ssn(df_ext)
-    
-df_rawext = pd.concat([df_raw, df_ext], ignore_index=True)
-df_rawext['address_1'].fillna('', inplace=True)
+#df_extra = pd.read_excel('JAN_MAR_HSIP_AWARD_MSTR_COPY.xlsx', sheet_name=None)
+#list_df = []
+#sheets = ['HSIPJAN','HSIPMAR','AWARDJAN','AWARDMAR']
+#for df, sheet in zip(df_extra.values(), sheets):
+#    df['uid'] = df.index + 2
+#    df['uid'] = df['uid'].apply(lambda x: f'{sheet}{x:0>5}')
+#    list_df.append(df)
+#df_ext = pd.concat(list_df, ignore_index=True, sort=False)
+#df_ext.dropna(axis=1, how='all', inplace=True)
+#df_ext = standardize_ssn(df_ext)
+#    
+#df_rawext = pd.concat([df_raw, df_ext], ignore_index=True)
+df_rawext = df_raw.copy()
 
 #%% Filter dataset based on rules.txt
 ssn_list = list(Rules.loc[Rules['column'] == 'ssn','value'])
@@ -92,6 +118,7 @@ df_address['address_score'] = 0.6*df_address['address_1'] + 0.4*df_address['city
 score = columns[['name','ssn']]
 score['address'] = df_address['address_score']
 score['total'] = score['name'] + score['ssn'] + score['address']
+score['uid'] = df_rawext['uid']
 
 keep_rows = score['total'] >= 2
 df = df_rawext[keep_rows].reset_index(drop=True)
@@ -102,7 +129,9 @@ careof = df['address_1'].apply(lambda x: 'C/O' in x)
 df.loc[careof,['address_1','address_2']] = df.loc[careof,['address_2','address_1']].values
 # add address_1 and address_2 for numbers only address_1
 numbersonly = df['address_1'].str.isnumeric()
-df.loc[numbersonly,'address_1'] = df.loc[numbersonly,'address_1'] + ' ' + df.loc[numbersonly,'address_2']
+notblank = df['address_2'].notnull()
+tf = numbersonly & notblank
+df.loc[tf,'address_1'] = df.loc[tf,'address_1'].astype(str) + ' ' + df.loc[tf,'address_2'].astype(str)
 
 # standardize suffixes to increase # of matched pairs
 suffix = [('SOUTH','S'),('NORTH','N'),('EAST','E'),('WEST','W'),
@@ -222,6 +251,7 @@ master.sort_values(['total','alexid','record'], ascending=[False,True,True], inp
 outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(outputfile)
 xlsx = master.drop(['n','first','middle','last','initials'], axis=1)
+xlsx[['amt','total']] = xlsx[['amt','total']].applymap(lambda x: f'{x:.2f}')
 xlsx['name'] = xlsx['name'].str.upper()
 
 #%% Identify possible false negatives
@@ -260,5 +290,3 @@ wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
 wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
 writer.save()
 print('{} created'.format(outputfile))
-
-
