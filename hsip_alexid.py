@@ -246,13 +246,15 @@ print(f'Adding MetaData {t4-t3:.1f}s')
 
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
+# formatting output
+master['date'] = master['date'].dt.strftime('%m-%d-%Y')
+master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
+master['name'] = master['name'].str.upper()
 
 #%%
 outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(outputfile)
 xlsx = master.drop(['n','first','middle','last','initials'], axis=1)
-xlsx[['amt','total']] = xlsx[['amt','total']].applymap(lambda x: f'{x:.2f}')
-xlsx['name'] = xlsx['name'].str.upper()
 
 #%% Identify possible false negatives
 address_alexid = xlsx.groupby('address_')['alexid'].nunique()
@@ -283,7 +285,7 @@ print(name_suspects.shape) #2002
 print(address_suspects.shape) #4673
 
 #%%
-xlsx.to_excel(writer, 'alexid', index=False)
+xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
 df_rawext[~keep_rows].to_excel(writer, 'invalid_rows', index=False)
 wb1.to_excel(writer, 'same_ssn_diff_alexid', index=False)
 wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
