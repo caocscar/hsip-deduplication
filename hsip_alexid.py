@@ -8,21 +8,14 @@ import pandas as pd
 import recordlinkage as rl
 import networkx as nx
 from collections import defaultdict
-import argparse
 import time
-import sys
 import string
 import re
+import os
 
 pd.options.display.max_rows = 16
 pd.options.display.max_columns = 25
 pd.options.mode.chained_assignment = None # suppress SettingWithCopyWarning
-
-desc = 'HSIP person record linkage algorithm'
-parser = argparse.ArgumentParser(description=desc)
-parser.add_argument('-f','--filename', type=str, help='name of Excel file')
-args = parser.parse_args()
-args.filename = '1 HSIP_Data_File-December_Copy.xlsx'
 
 #%%
 def standardize_ssn(df):
@@ -32,8 +25,10 @@ def standardize_ssn(df):
     return df
 
 def standardize_name(df):
+    tf = df['name'].notnull() # check for blank names
+    df = df[tf]
     tf = df['name'].str.contains('@')
-    df.loc[tf,'email'] = df.loc[tf,'name']
+    df.loc[tf,'email'] = df.loc[tf,'name'] # assign email to correct column
     df.loc[tf,'name'] = ''
     name_invalid_punctuation = re.sub(r'[-&@]','',string.punctuation)
     regex1 = re.compile(rf'[{name_invalid_punctuation}]')
@@ -45,7 +40,7 @@ def standardize_name(df):
 
 def standardize_address(df):
     tf = df['address_1'].str.contains('@')
-    df.loc[tf,'email'] = df.loc[tf,'address_1']
+    df.loc[tf,'email'] = df.loc[tf,'address_1'] # assign email to correct column
     df.loc[tf,'address_1'] = ''
     address_invalid_punctuation = re.sub(r'[-&#/@]','',string.punctuation)
     regex = re.compile(rf'[{address_invalid_punctuation}]')
@@ -53,26 +48,23 @@ def standardize_address(df):
     df['address_1'].replace({'': None}, inplace=True)
     return df
 
-if not args.filename:
-    print("You need to supply a --filename argument")
-    sys.exit()
-    
-filename = args.filename
-df_raw = pd.read_excel(filename, sheet_name=0)
-cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
-       'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
-       'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
-newcols = ['hsip', 'sid', 'name', 'email', 'ssn', 
-              'address_1', 'address_2', 'city', 'country', 'state',
-              'postal', 'method', 'date', 'amt', 'entered',
-              'updated','status']
-colnames = dict(zip(cols,newcols))
-df_raw.rename(columns=colnames, inplace=True)
+wdir = r'X:\HSIP'
+filename = 'HSIP_2018_Dec_to_CSCAR.xlsx'
+df_raw = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
+#cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
+#       'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
+#       'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
+#newcols = ['hsip', 'sid', 'name', 'email', 'ssn', 
+#              'address_1', 'address_2', 'city', 'country', 'state',
+#              'postal', 'method', 'date', 'amt', 'entered',
+#              'updated','status']
+#colnames = dict(zip(cols,newcols))
+#df_raw.rename(columns=colnames, inplace=True)
 df_raw = standardize_ssn(df_raw)
 df_raw = standardize_name(df_raw)
 df_raw = standardize_address(df_raw)
 df_raw['uid'] = df_raw.index + 2
-df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>5}')
+df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>6}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
 
@@ -167,10 +159,14 @@ def get_index_pairs_rules(df, columns):
         columns = [columns]
     threshold = 0.82
     rules = rl.Compare()
-    rules.string('first', 'first', label='first', method='jarowinkler', threshold=threshold)
-    rules.string('last', 'last', label='last', method='jarowinkler', threshold=threshold)
-    rules.string('ssn', 'ssn', label='ssn', method='damerau_levenshtein', threshold=0.77)
-    rules.string('address_', 'address_', label='address_', method='jarowinkler', threshold=threshold)
+    if 'first' not in columns:
+        rules.string('first', 'first', label='first', method='jarowinkler', threshold=threshold)
+    if 'last' not in columns:
+        rules.string('last', 'last', label='last', method='jarowinkler', threshold=threshold)
+    if 'ssn' not in columns:
+        rules.string('ssn', 'ssn', label='ssn', method='damerau_levenshtein', threshold=0.77)
+    if 'address_' not in columns:
+        rules.string('address_', 'address_', label='address_', method='jarowinkler', threshold=threshold)
     for col in columns:
         rules.exact(col, col, label=col)
     indexer = rl.BlockIndex(on=columns)
@@ -225,9 +221,9 @@ singletons['alexid'] = range(maxid, maxid+singletons.shape[0])
 
 #%%
 def get_count(data):
-    name_ct = len(set(data['name']))
-    ssn_ct = len(set(data['ssn']))
-    address_ct = len(set(data['address_']))
+    name_ct = len(set(data['name'].astype(str)))
+    ssn_ct = len(set(data['ssn'].astype(str)))
+    address_ct = len(set(data['address_'].astype(str)))
     return (name_ct, ssn_ct, address_ct)
 
 t3 = time.time()
@@ -253,7 +249,7 @@ master['name'] = master['name'].str.upper()
 
 #%%
 outputfile = filename.replace('.xlsx','_alexid.xlsx')
-writer = pd.ExcelWriter(outputfile)
+writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx = master.drop(['n','first','middle','last','initials'], axis=1)
 
 #%% Identify possible false negatives
