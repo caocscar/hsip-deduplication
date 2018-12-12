@@ -23,6 +23,7 @@ name|ILLEGIBLE
 name|JOHN DOE
 name|UNKNOWN
 name|UOFMPARTICIPANT
+name|U OF M PARTICIPANT
 postal|11110
 postal|11111
 postal|11112
