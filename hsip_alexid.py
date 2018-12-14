@@ -87,14 +87,18 @@ df_rawext = df_raw.copy()
 ssn_list = list(Rules.loc[Rules['column'] == 'ssn','value'])
 ssn_dict = {ssn:None for ssn in ssn_list}
 
+address_list = list(Rules.loc[Rules['column'] == 'address_1','value'])
+address_dict = {addr.replace(' ','').lower():None for addr in address_list}
+
 rules_dict = defaultdict(list)
 for col, rule in Rules.groupby('column'):
     rules_dict[col] = rule['value'].tolist()
+rules_dict['email'] = []
 
 list_k = []   
 for col, invalid_entries in rules_dict.items():
     if col == 'email':
-        pass
+        valid = df_rawext['email'].str.contains('@') & df_rawext['email'].notnull()
     else:
         rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
         valid = ~rule1
@@ -103,7 +107,7 @@ columns = pd.concat(list_k, axis=1)
 columns = columns.astype(int)
 
 # special address handling
-score = columns[['name','ssn','address_1']]
+score = columns[['name','email','ssn','address_1']]
 score['total'] = score.sum(axis=1)
 score['uid'] = df_rawext['uid']
 
@@ -132,7 +136,18 @@ suffix = [('SOUTH','S'),('NORTH','N'),('EAST','E'),('WEST','W'),
 suffix_dict = {rf'\b{x[0]}\b':x[1] for x in suffix}
 
 df['address_'] = df['address_1'].replace(suffix_dict, regex=True)
-df['address_'] = df['address_'].str.replace(' ','').str.lower()
+df['address_'] = df['address_'].str.replace(' ','').str.replace(',','').str.lower()
+
+regex_email = re.compile('^(.+)@')
+
+def get_local_part(x):
+    match = re.search(regex_email, x)
+    local_part = match.group(1).lower()
+    return re.sub(r'[.0-9_]', '', local_part)
+
+tf = df['email'].str.contains('@') & df['email'].notnull()
+df.loc[tf,'email_'] = df.loc[tf,'email'].apply(get_local_part)
+
 df['name'] = df['name'].str.lower()
 df['n'] = df['name'].apply(lambda x: len(x.split()) )
 names = df['name'].str.split(' ', expand=True, n=2)
@@ -145,8 +160,8 @@ df.loc[twonamesonly,['last','middle']] = df.loc[twonamesonly,['middle','last']].
 
 #%% create dataframe for linking
 df['initials'] = df['first'].str[0] + df['last'].str[0]
-df_linkage = df[['first','last','initials','ssn','address_']]
-df_linkage.replace({'ssn':ssn_dict}, inplace=True)
+df_linkage = df[['first','last','initials','email_','ssn','address_']]
+df_linkage.replace({'ssn':ssn_dict,'address_':address_dict}, inplace=True)
 
 #%%
 def get_index_pairs_rules(df, columns):
@@ -162,6 +177,8 @@ def get_index_pairs_rules(df, columns):
         rules.string('ssn', 'ssn', label='ssn', method='damerau_levenshtein', threshold=0.77)
     if 'address_' not in columns:
         rules.string('address_', 'address_', label='address_', method='jarowinkler', threshold=threshold)
+    if 'email_' not in columns:
+        rules.string('email_', 'email_', label='email_', method='jarowinkler', threshold=threshold)
     for col in columns:
         rules.exact(col, col, label=col)
     indexer = rl.index.Block(left_on=columns, right_on=None)
@@ -170,7 +187,7 @@ def get_index_pairs_rules(df, columns):
 
 def score_calculation(df):    
     df['name'] = 0.5*df['first'] + 0.5*df['last']
-    df = df[['name','ssn','address_']]       
+    df = df[['name','email_','ssn','address_']]       
     df['total'] = df.sum(axis=1)
     df.reset_index(inplace=True)
     df.rename(columns={'level_0':'rec1','level_1':'rec2'}, inplace=True)
@@ -178,18 +195,18 @@ def score_calculation(df):
     return df
 
 #%% blocking and linking
-blocks = ['ssn','address_',['last','initials'],['first','initials']]
+blocks = ['ssn','email_','address_',['last','initials'],['first','initials']]
 pair_score = []
 for block in blocks:
     idx_pairs, rules = get_index_pairs_rules(df_linkage, block)
+    print(f'{block} pairs = {len(idx_pairs):,}')
     t1 = time.time()
-    print(f'{len(idx_pairs):,}')
     features = rules.compute(idx_pairs, df_linkage)
     t2 = time.time()
-    print(f'{block} Block Matching took {t2-t1:.1f} sec' )
-    print('Pairs per second: {:.0f}'.format(len(idx_pairs)/(t2-t1)))
+    print(f'Matching took {t2-t1:.1f} sec' )
+    print('Pairs per second: {:.0f}\n'.format(len(idx_pairs)/(t2-t1)))
     pair_score.append(score_calculation(features))
-#assert 1>2
+
 scores = pd.concat(pair_score, ignore_index=True, sort=False)
 matches = scores[scores['total'] >= 2]
 matches.reset_index(drop=True, inplace=True)
