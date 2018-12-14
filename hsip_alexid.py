@@ -8,6 +8,7 @@ import pandas as pd
 import recordlinkage as rl
 import networkx as nx
 from collections import defaultdict
+from nameparser import HumanName
 import time
 import string
 import re
@@ -25,26 +26,26 @@ def standardize_ssn(df):
     return df
 
 def standardize_name(df):
-    tf = df['name'].notnull() # check for blank names
-    df = df[tf]
+    df['name'].fillna('', inplace=True) # check for blank names
     tf = df['name'].str.contains('@')
     df.loc[tf,'email'] = df.loc[tf,'name'] # assign email to correct column
     df.loc[tf,'name'] = ''
     name_invalid_punctuation = re.sub(r'[-&@]','',string.punctuation)
-    regex1 = re.compile(rf'[{name_invalid_punctuation}]')
-    regex2 = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|MHS|)\b')
-    tmp = df['name'].apply(lambda x: re.sub(regex1, '', x))
-    df['name'] = tmp.apply(lambda x: re.sub(regex2, '', x).strip(' '))
+    regex_punct = re.compile(rf'[{name_invalid_punctuation}]')
+    regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|MHS|)\b')
+    tmp = df['name'].apply(lambda x: re.sub(regex_punct, '', x))
+    df['name'] = tmp.apply(lambda x: re.sub(regex_titles, '', x).strip(' '))
     df['name'].replace({'': None}, inplace=True)
     return df
 
 def standardize_address(df):
+    df['address_1'].fillna('', inplace=True) # check for blank addresses
     tf = df['address_1'].str.contains('@')
     df.loc[tf,'email'] = df.loc[tf,'address_1'] # assign email to correct column
     df.loc[tf,'address_1'] = ''
     address_invalid_punctuation = re.sub(r'[-&#/@]','',string.punctuation)
-    regex = re.compile(rf'[{address_invalid_punctuation}]')
-    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex, '', x).strip(' ') )
+    regex_punct = re.compile(rf'[{address_invalid_punctuation}]')
+    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex_punct, '', x).strip(' ') )
     df['address_1'].replace({'': None}, inplace=True)
     return df
 
@@ -113,6 +114,7 @@ score['uid'] = df_rawext['uid']
 
 keep_rows = score['total'] >= 2
 df = df_rawext[keep_rows].reset_index(drop=True)
+invalid_records = df_rawext[~keep_rows]
 
 #%% data wrangling for matching purposes
 # swap c/o address_1 with address_2
@@ -138,7 +140,7 @@ suffix_dict = {rf'\b{x[0]}\b':x[1] for x in suffix}
 df['address_'] = df['address_1'].replace(suffix_dict, regex=True)
 df['address_'] = df['address_'].str.replace(' ','').str.replace(',','').str.lower()
 
-regex_email = re.compile('^(.+)@')
+regex_email = re.compile('^(.+)@?', flags=re.IGNORECASE)
 
 def get_local_part(x):
     match = re.search(regex_email, x)
@@ -148,15 +150,16 @@ def get_local_part(x):
 tf = df['email'].str.contains('@') & df['email'].notnull()
 df.loc[tf,'email_'] = df.loc[tf,'email'].apply(get_local_part)
 
-df['name'] = df['name'].str.lower()
-df['n'] = df['name'].apply(lambda x: len(x.split()) )
-names = df['name'].str.split(' ', expand=True, n=2)
-names.columns = ['first','middle','last']
-df = df.merge(names, left_index=True, right_index=True)
+def parse_name(df):
+    names = []
+    for row in df.itertuples():
+        nom = HumanName(row.name)
+        names.append((nom.first, nom.last))
+    return pd.DataFrame(names, columns=['first','last'])
 
-# swap middle and last names for ppl with only two names
-twonamesonly = (df['n'] == 2)
-df.loc[twonamesonly,['last','middle']] = df.loc[twonamesonly,['middle','last']].values
+df['name'] = df['name'].str.lower().str.replace(' - ','-').str.replace('-',' ')
+names = parse_name(df)
+df = df.merge(names, left_index=True, right_index=True)
 
 #%% create dataframe for linking
 df['initials'] = df['first'].str[0] + df['last'].str[0]
@@ -235,16 +238,17 @@ singletons['alexid'] = range(maxid, maxid+singletons.shape[0])
 #%%
 def get_count(data):
     name_ct = len(set(data['name'].astype(str)))
+    email_ct = len(set(data['email_'].astype(str)))
     ssn_ct = len(set(data['ssn'].astype(str)))
     address_ct = len(set(data['address_'].astype(str)))
-    return (name_ct, ssn_ct, address_ct)
+    return (name_ct, email_ct, ssn_ct, address_ct)
 
 t3 = time.time()
 master = pd.concat([alex, singletons], ignore_index=True)
 total = master.groupby('alexid')['amt'].sum().to_frame()
 total.columns = ['total']
 cts = master.groupby('alexid').apply(get_count)
-counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','ssn_ct','address_ct'])
+counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','email_ct','ssn_ct','address_ct'])
 counts['ct_sum'] = counts.sum(axis=1)
 total_cts = pd.concat([total, counts], axis=1)
 master = master.merge(total_cts, how='left', left_on='alexid', right_index=True)
@@ -256,16 +260,16 @@ print(f'Adding MetaData {t4-t3:.1f}s')
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
 # formatting output
-master['date'] = master['date'].dt.strftime('%m-%d-%Y')
-master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
 master['name'] = master['name'].str.upper()
 master['ssn'].fillna('000000000', inplace=True)
 master['ssn'] = master['ssn'].map(lambda x: f'{x:0>9}')
+master['date'] = master['date'].dt.strftime('%m-%d-%Y')
+master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
 
 #%%
 outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
-xlsx = master.drop(['n','first','middle','last','initials'], axis=1)
+xlsx = master.drop(['first','last','initials'], axis=1)
 
 #%% Identify possible false negatives
 address_alexid = xlsx.groupby('address_')['alexid'].nunique()
@@ -275,8 +279,15 @@ address_set = set(address_suspects.index) - set(address_list)
 wb3 = xlsx[xlsx['address_'].isin(address_set)]
 wb3.sort_values(['address_','alexid'], inplace=True)
 
-wb3.drop('address_', axis=1, inplace=True)
-xlsx.drop('address_', axis=1, inplace=True)
+email_alexid = xlsx.groupby('email_')['alexid'].nunique()
+email_suspects = email_alexid[email_alexid > 1]
+email_set = set(email_suspects.index)
+wb4 = xlsx[xlsx['email_'].isin(email_set)]
+wb4.sort_values(['email_','alexid'], inplace=True)
+
+wb3.drop(['address_','email_'], axis=1, inplace=True)
+wb4.drop(['address_','email_'], axis=1, inplace=True)
+xlsx.drop(['address_','email_'], axis=1, inplace=True)
 
 ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
 ssn_suspects = ssn_alexid[ssn_alexid > 1]
@@ -290,16 +301,18 @@ name_list = list(Rules.loc[Rules['column'] == 'name','value'])
 name_set = set(name_suspects.index) - set(name_list)
 wb2 = xlsx[xlsx['name'].isin(name_set)]
 wb2.sort_values(['name','alexid'], inplace=True)
-
+   
 print(ssn_suspects.shape) 
 print(name_suspects.shape)
+print(email_suspects.shape)
 print(address_suspects.shape)
 
 #%%
 xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
-df_rawext[~keep_rows].to_excel(writer, 'invalid_rows', index=False)
+invalid_records.to_excel(writer, 'invalid_rows', index=False)
 wb1.to_excel(writer, 'same_ssn_diff_alexid', index=False)
 wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
 wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
+wb4.to_excel(writer, 'same_email_diff_alexid', index=False)
 writer.save()
 print('{} created'.format(outputfile))
