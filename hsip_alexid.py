@@ -32,7 +32,7 @@ def standardize_name(df):
     df.loc[tf,'name'] = ''
     name_invalid_punctuation = re.sub(r'[-&@]','',string.punctuation)
     regex1 = re.compile(rf'[{name_invalid_punctuation}]')
-    regex2 = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|DO|MHS|)\b')
+    regex2 = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|MHS|)\b')
     tmp = df['name'].apply(lambda x: re.sub(regex1, '', x))
     df['name'] = tmp.apply(lambda x: re.sub(regex2, '', x).strip(' '))
     df['name'].replace({'': None}, inplace=True)
@@ -63,7 +63,7 @@ df_raw = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
 df_raw = standardize_ssn(df_raw)
 df_raw = standardize_name(df_raw)
 df_raw = standardize_address(df_raw)
-df_raw['uid'] = df_raw.index + 2
+df_raw['uid'] = df_raw.index + 1
 df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>6}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
@@ -93,23 +93,18 @@ for col, rule in Rules.groupby('column'):
 
 list_k = []   
 for col, invalid_entries in rules_dict.items():
-    rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
-    if col == 'ssn':
-        rule2 = df_rawext['ssn'].str.startswith('11111')
-        valid = ~(rule1 | rule2)
+    if col == 'email':
+        pass
     else:
+        rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
         valid = ~rule1
     list_k.append(valid)
 columns = pd.concat(list_k, axis=1)
 columns = columns.astype(int)
 
 # special address handling
-df_address = columns[['address_1','city','postal']]
-df_address['address_score'] = 0.6*df_address['address_1'] + 0.4*df_address['city'] + 0.4*df_address['postal']
-
-score = columns[['name','ssn']]
-score['address'] = df_address['address_score']
-score['total'] = score['name'] + score['ssn'] + score['address']
+score = columns[['name','ssn','address_1']]
+score['total'] = score.sum(axis=1)
 score['uid'] = df_rawext['uid']
 
 keep_rows = score['total'] >= 2
@@ -169,7 +164,7 @@ def get_index_pairs_rules(df, columns):
         rules.string('address_', 'address_', label='address_', method='jarowinkler', threshold=threshold)
     for col in columns:
         rules.exact(col, col, label=col)
-    indexer = rl.BlockIndex(on=columns)
+    indexer = rl.index.Block(left_on=columns, right_on=None)
     idx_pairs = indexer.index(df)
     return idx_pairs, rules
 
@@ -188,12 +183,13 @@ pair_score = []
 for block in blocks:
     idx_pairs, rules = get_index_pairs_rules(df_linkage, block)
     t1 = time.time()
+    print(f'{len(idx_pairs):,}')
     features = rules.compute(idx_pairs, df_linkage)
     t2 = time.time()
     print(f'{block} Block Matching took {t2-t1:.1f} sec' )
     print('Pairs per second: {:.0f}'.format(len(idx_pairs)/(t2-t1)))
     pair_score.append(score_calculation(features))
-
+#assert 1>2
 scores = pd.concat(pair_score, ignore_index=True, sort=False)
 matches = scores[scores['total'] >= 2]
 matches.reset_index(drop=True, inplace=True)
@@ -246,6 +242,8 @@ master.sort_values(['total','alexid','record'], ascending=[False,True,True], inp
 master['date'] = master['date'].dt.strftime('%m-%d-%Y')
 master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
 master['name'] = master['name'].str.upper()
+master['ssn'].fillna('000000000', inplace=True)
+master['ssn'] = master['ssn'].map(lambda x: f'{x:0>9}')
 
 #%%
 outputfile = filename.replace('.xlsx','_alexid.xlsx')
@@ -276,9 +274,9 @@ name_set = set(name_suspects.index) - set(name_list)
 wb2 = xlsx[xlsx['name'].isin(name_set)]
 wb2.sort_values(['name','alexid'], inplace=True)
 
-print(ssn_suspects.shape) #35
-print(name_suspects.shape) #2002
-print(address_suspects.shape) #4673
+print(ssn_suspects.shape) 
+print(name_suspects.shape)
+print(address_suspects.shape)
 
 #%%
 xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
