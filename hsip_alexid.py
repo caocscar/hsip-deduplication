@@ -140,14 +140,14 @@ suffix_dict = {rf'\b{x[0]}\b':x[1] for x in suffix}
 df['address_'] = df['address_1'].replace(suffix_dict, regex=True)
 df['address_'] = df['address_'].str.replace(' ','').str.replace(',','').str.lower()
 
-regex_email = re.compile('^(.+)@?', flags=re.IGNORECASE)
+regex_email = re.compile('^([^@]+)@?', flags=re.IGNORECASE)
 
 def get_local_part(x):
     match = re.search(regex_email, x)
     local_part = match.group(1).lower()
-    return re.sub(r'[.0-9_]', '', local_part)
+    return re.sub(r'[._]', '', local_part)
 
-tf = df['email'].str.contains('@') & df['email'].notnull()
+tf = df['email'].notnull()
 df.loc[tf,'email_'] = df.loc[tf,'email'].apply(get_local_part)
 
 def parse_name(df):
