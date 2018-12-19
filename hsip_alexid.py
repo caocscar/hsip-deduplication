@@ -13,6 +13,7 @@ import time
 import string
 import re
 import os
+from itertools import combinations, chain
 
 pd.options.display.max_rows = 16
 pd.options.display.max_columns = 25
@@ -45,13 +46,24 @@ def standardize_address(df):
     df.loc[tf,'address_1'] = ''
     address_invalid_punctuation = re.sub(r'[-&#/@]','',string.punctuation)
     regex_punct = re.compile(rf'[{address_invalid_punctuation}]')
-    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex_punct, '', x).strip(' ') )
+    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex_punct, '', x).strip() )
     df['address_1'].replace({'': None}, inplace=True)
     return df
 
+def standardize_email(df):
+    df['email'].fillna('', inplace=True) # check for blank emails
+    df['email'] = df['email'].str.lower()
+    df['email'] = df['email'].apply(lambda x: re.sub(r'[._]','',x).strip() )
+    df['email'].replace({'': None}, inplace=True)
+    return df
+
+#%%    
 wdir = r'X:\HSIP'
-filename = 'HSIP_2018_Dec_to_CSCAR.xlsx'
-df_raw = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
+filename = 'New_alex_id_HSIP_2018_Dec_to_CSCAR_alexid.xlsx'
+df_input = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
+df_raw = df_input.loc[:,'hsip':'origaddress_1']
+if 'alexid' in filename:
+    kathy = df_input[['uid','NEW ALEX ID','TIN MATCH','NOTES']]
 #cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
 #       'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
 #       'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
@@ -157,17 +169,18 @@ def parse_name(df):
         names.append((nom.first, nom.last))
     return pd.DataFrame(names, columns=['first','last'])
 
-df['name'] = df['name'].str.lower().str.replace(' - ','-').str.replace('-',' ')
+df['name'] = df['name'].str.upper().str.replace(' - ','-').str.replace('-',' ')
 names = parse_name(df)
 df = df.merge(names, left_index=True, right_index=True)
 
 #%% create dataframe for linking
 df['initials'] = df['first'].str[0] + df['last'].str[0]
 df_linkage = df[['first','last','initials','email_','ssn','address_']]
+df_linkage['ssn'] = df_linkage['ssn'].map(lambda x: f'{x:0>9}')
 df_linkage.replace({'ssn':ssn_dict,'address_':address_dict}, inplace=True)
 
 #%%
-def get_index_pairs_rules(df, columns):
+def get_rules(columns):
     if isinstance(columns, str):
         columns = [columns]
     threshold = 0.82
@@ -184,9 +197,25 @@ def get_index_pairs_rules(df, columns):
         rules.string('email_', 'email_', label='email_', method='jarowinkler', threshold=threshold)
     for col in columns:
         rules.exact(col, col, label=col)
+    return rules
+
+def get_index_pairs(df, columns):
+    if isinstance(columns, str):
+        columns = [columns]
     indexer = rl.index.Block(left_on=columns, right_on=None)
     idx_pairs = indexer.index(df)
-    return idx_pairs, rules
+    return idx_pairs
+
+def create_index_pairs(df, columns):
+    if isinstance(columns, str):
+        columns = [columns]
+    columns_dict = df.groupby(columns).indices
+    pairs = []
+    for k,v in columns_dict.items():
+        if len(v) > 1 and k != 'nan':
+            pairs.append(combinations(v,2))
+    pairs = list(chain.from_iterable(pairs))
+    return pd.MultiIndex.from_tuples(pairs)
 
 def score_calculation(df):    
     df['name'] = 0.5*df['first'] + 0.5*df['last']
@@ -201,7 +230,8 @@ def score_calculation(df):
 blocks = ['ssn','email_','address_',['last','initials'],['first','initials']]
 pair_score = []
 for block in blocks:
-    idx_pairs, rules = get_index_pairs_rules(df_linkage, block)
+    rules = get_rules(block)
+    idx_pairs = get_index_pairs(df_linkage, block)
     print(f'{block} pairs = {len(idx_pairs):,}')
     t1 = time.time()
     features = rules.compute(idx_pairs, df_linkage)
@@ -260,14 +290,26 @@ print(f'Adding MetaData {t4-t3:.1f}s')
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
 # formatting output
-master['name'] = master['name'].str.upper()
+master['name'] = master['name'].str.upper() # future delete
 master['ssn'].fillna('000000000', inplace=True)
 master['ssn'] = master['ssn'].map(lambda x: f'{x:0>9}')
-master['date'] = master['date'].dt.strftime('%m-%d-%Y')
-master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
+df_date = master.select_dtypes(include='datetime')
+if 'date' in df_date.columns:
+    master['date'] = master['date'].dt.strftime('%m-%d-%Y')
+if 'entered' in df_date.columns:
+    master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
+
+#%% Manually override alexid
+print(f'Overriding {tf.sum()} rows with new alexid')
+master2 = master.merge(kathy, how='left', on='uid')
+tf = (master2['NEW ALEX ID'].notnull()) & (master2['NEW ALEX ID'] >= 1e9)
+master2.loc[tf,'alexid'] = master2.loc[tf,'NEW ALEX ID']
 
 #%%
-outputfile = filename.replace('.xlsx','_alexid.xlsx')
+if 'alexid' in filename:
+    outputfile = filename.replace('alexid','alexid2')
+else:
+    outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx = master.drop(['first','last','initials'], axis=1)
 
