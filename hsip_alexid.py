@@ -31,7 +31,7 @@ def standardize_name(df):
     tf = df['name'].str.contains('@')
     df.loc[tf,'email'] = df.loc[tf,'name'] # assign email to correct column
     df.loc[tf,'name'] = ''
-    name_invalid_punctuation = re.sub(r'[-&@]','',string.punctuation)
+    name_invalid_punctuation = re.sub(r'[-&]','',string.punctuation)
     regex_punct = re.compile(rf'[{name_invalid_punctuation}]')
     regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|MHS|)\b')
     tmp = df['name'].apply(lambda x: re.sub(regex_punct, '', x))
@@ -61,9 +61,11 @@ def standardize_email(df):
 wdir = r'X:\HSIP'
 filename = 'New_alex_id_HSIP_2018_Dec_to_CSCAR_alexid.xlsx'
 df_input = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
-df_raw = df_input.loc[:,'hsip':'origaddress_1']
+df_input.rename(columns={'NEW ALEX ID':'new_alexid'}, inplace=True)
+df_raw = df_input.loc[:,'hsip':'uid']
 if 'alexid' in filename:
-    kathy = df_input[['uid','NEW ALEX ID','TIN MATCH','NOTES']]
+    kathy = df_input[['uid','new_alexid','TIN MATCH','NOTES']]
+    invalid_records = pd.read_excel(os.path.join(wdir,filename), sheet_name='invalid_rows')
 #cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
 #       'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
 #       'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
@@ -76,8 +78,9 @@ if 'alexid' in filename:
 df_raw = standardize_ssn(df_raw)
 df_raw = standardize_name(df_raw)
 df_raw = standardize_address(df_raw)
-df_raw['uid'] = df_raw.index + 1
-df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>6}')
+if 'uid' not in df_raw.columns:
+    df_raw['uid'] = df_raw.index + 1
+    df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>6}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
 
@@ -126,7 +129,8 @@ score['uid'] = df_rawext['uid']
 
 keep_rows = score['total'] >= 2
 df = df_rawext[keep_rows].reset_index(drop=True)
-invalid_records = df_rawext[~keep_rows]
+if 'alexid' not in filename:
+    invalid_records = df_rawext[~keep_rows]
 
 #%% data wrangling for matching purposes
 # swap c/o address_1 with address_2
@@ -165,11 +169,11 @@ df.loc[tf,'email_'] = df.loc[tf,'email'].apply(get_local_part)
 def parse_name(df):
     names = []
     for row in df.itertuples():
-        nom = HumanName(row.name)
+        nom = HumanName(row.name_)
         names.append((nom.first, nom.last))
     return pd.DataFrame(names, columns=['first','last'])
 
-df['name'] = df['name'].str.upper().str.replace(' - ','-').str.replace('-',' ')
+df['name'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
 names = parse_name(df)
 df = df.merge(names, left_index=True, right_index=True)
 
@@ -250,20 +254,31 @@ edgelist = list(zip(matches['rec1'],matches['rec2']))
 G.add_edges_from(edgelist)
 cc = nx.connected_components(G)
 labels = {}
-for sid, pids in enumerate(cc, start=1):
-    for pid in pids:
-        labels[pid] = sid
+labels_rev = defaultdict(list)
+for alexid, recids in enumerate(cc, start=1):
+    for recid in recids:
+        labels[recid] = alexid
+        labels_rev[alexid].append(recid)
 personid = pd.DataFrame.from_dict(labels, orient='index')
 personid.columns = ['alexid']
-maxid = sid + 1
+maxid = alexid + 1
 
-#%%
+#%% assigns id to singletons and merge with groups
 dakota = df.merge(personid, how='left', left_index=True, right_index=True)
 alex = dakota[dakota['alexid'].notnull()]
 alex['alexid'] = alex['alexid'].astype(int)
 singletons = dakota[dakota['alexid'].isnull()]
 singletons.dropna(axis=1, how='all', inplace=True)
 singletons['alexid'] = range(maxid, maxid+singletons.shape[0])
+master = pd.concat([alex, singletons], ignore_index=False)
+
+#%% manually override alexid with new alexid
+if 'alexid' in filename:
+    df_override = kathy[kathy['new_alexid'] > 1e9]
+    for row in df_override.itertuples():
+        master.loc[master['uid'] == row.uid,'alexid'] = row.new_alexid
+        assert sum(master['uid'] == row.uid) == 1
+    print(f'Replaced {df_override.shape[0]} rows with new alexid')        
 
 #%%
 def get_count(data):
@@ -273,19 +288,18 @@ def get_count(data):
     address_ct = len(set(data['address_'].astype(str)))
     return (name_ct, email_ct, ssn_ct, address_ct)
 
-t3 = time.time()
-master = pd.concat([alex, singletons], ignore_index=True)
 total = master.groupby('alexid')['amt'].sum().to_frame()
 total.columns = ['total']
+t3 = time.time()
 cts = master.groupby('alexid').apply(get_count)
+t4 = time.time()
 counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','email_ct','ssn_ct','address_ct'])
 counts['ct_sum'] = counts.sum(axis=1)
 total_cts = pd.concat([total, counts], axis=1)
 master = master.merge(total_cts, how='left', left_on='alexid', right_index=True)
 master = master.sort_values(['alexid','date'], ascending=[True,False])
 master['record'] = master.groupby('alexid').cumcount() + 1
-t4 = time.time()
-print(f'Adding MetaData {t4-t3:.1f}s')
+print(f'Adding Count Data {t4-t3:.1f} sec')
 
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
@@ -299,12 +313,6 @@ if 'date' in df_date.columns:
 if 'entered' in df_date.columns:
     master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
 
-#%% Manually override alexid
-print(f'Overriding {tf.sum()} rows with new alexid')
-master2 = master.merge(kathy, how='left', on='uid')
-tf = (master2['NEW ALEX ID'].notnull()) & (master2['NEW ALEX ID'] >= 1e9)
-master2.loc[tf,'alexid'] = master2.loc[tf,'NEW ALEX ID']
-
 #%%
 if 'alexid' in filename:
     outputfile = filename.replace('alexid','alexid2')
@@ -312,8 +320,22 @@ else:
     outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx = master.drop(['first','last','initials'], axis=1)
+xlsx = xlsx.merge(kathy, how='left', on='uid')
 
 #%% Identify possible false negatives
+ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
+ssn_suspects = ssn_alexid[ssn_alexid > 1]
+ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
+wb1 = xlsx[xlsx['ssn'].isin(ssn_set)]
+wb1.sort_values(['ssn','alexid'], inplace=True)
+
+name_alexid = xlsx.groupby('name_')['alexid'].nunique()
+name_suspects = name_alexid[name_alexid > 1]
+name_list = list(Rules.loc[Rules['column'] == 'name_','value'])
+name_set = set(name_suspects.index) - set(name_list)
+wb2 = xlsx[xlsx['name_'].isin(name_set)]
+wb2.sort_values(['name_','alexid'], inplace=True)
+
 address_alexid = xlsx.groupby('address_')['alexid'].nunique()
 address_suspects = address_alexid[address_alexid > 1]
 address_list = list(Rules.loc[Rules['column'] == 'name','value'])
@@ -327,27 +349,16 @@ email_set = set(email_suspects.index)
 wb4 = xlsx[xlsx['email_'].isin(email_set)]
 wb4.sort_values(['email_','alexid'], inplace=True)
 
-wb3.drop(['address_','email_'], axis=1, inplace=True)
-wb4.drop(['address_','email_'], axis=1, inplace=True)
-xlsx.drop(['address_','email_'], axis=1, inplace=True)
-
-ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
-ssn_suspects = ssn_alexid[ssn_alexid > 1]
-ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
-wb1 = xlsx[xlsx['ssn'].isin(ssn_set)]
-wb1.sort_values(['ssn','alexid'], inplace=True)
-
-name_alexid = xlsx.groupby('name')['alexid'].nunique()
-name_suspects = name_alexid[name_alexid > 1]
-name_list = list(Rules.loc[Rules['column'] == 'name','value'])
-name_set = set(name_suspects.index) - set(name_list)
-wb2 = xlsx[xlsx['name'].isin(name_set)]
-wb2.sort_values(['name','alexid'], inplace=True)
+xlsx.drop(['address_','email_','name_'], axis=1, inplace=True)
+wb1.drop(['address_','email_','name_'], axis=1, inplace=True)
+wb2.drop(['address_','email_','name_'], axis=1, inplace=True)
+wb3.drop(['address_','email_','name_'], axis=1, inplace=True)
+wb4.drop(['address_','email_','name_'], axis=1, inplace=True)
    
-print(ssn_suspects.shape) 
-print(name_suspects.shape)
-print(email_suspects.shape)
-print(address_suspects.shape)
+print('ssn', ssn_suspects.shape) 
+print('name', name_suspects.shape)
+print('address', address_suspects.shape)
+print('email', email_suspects.shape)
 
 #%%
 xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
