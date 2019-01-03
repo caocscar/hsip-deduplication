@@ -23,7 +23,7 @@ pd.options.mode.chained_assignment = None # suppress SettingWithCopyWarning
 def standardize_ssn(df):
     if df['ssn'].dtype == 'float':
         tf = df['ssn'].notnull()
-        df.loc[tf,'ssn'] = df.loc[tf,'ssn'].apply(lambda x: f'{x:.0f}')
+        df.loc[tf,'ssn'] = df.loc[tf,'ssn'].apply(lambda x: f'{x:.0f}') # change to 0>9
     return df
 
 def standardize_name(df):
@@ -61,11 +61,13 @@ def standardize_email(df):
 wdir = r'X:\HSIP'
 filename = 'New_alex_id_HSIP_2018_Dec_to_CSCAR_alexid.xlsx'
 df_input = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
-df_input.rename(columns={'NEW ALEX ID':'new_alexid'}, inplace=True)
-df_raw = df_input.loc[:,'hsip':'uid']
 if 'alexid' in filename:
+    df_input.rename(columns={'NEW ALEX ID':'new_alexid'}, inplace=True)
+    df_raw = df_input.loc[:,'hsip':'uid']
     kathy = df_input[['uid','new_alexid','TIN MATCH','NOTES']]
     invalid_records = pd.read_excel(os.path.join(wdir,filename), sheet_name='invalid_rows')
+else:
+    df_raw = df_input.copy()
 #cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
 #       'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
 #       'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
@@ -122,7 +124,6 @@ for col, invalid_entries in rules_dict.items():
 columns = pd.concat(list_k, axis=1)
 columns = columns.astype(int)
 
-# special address handling
 score = columns[['name','email','ssn','address_1']]
 score['total'] = score.sum(axis=1)
 score['uid'] = df_rawext['uid']
@@ -173,7 +174,7 @@ def parse_name(df):
         names.append((nom.first, nom.last))
     return pd.DataFrame(names, columns=['first','last'])
 
-df['name'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
+df['name_'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
 names = parse_name(df)
 df = df.merge(names, left_index=True, right_index=True)
 
@@ -320,7 +321,8 @@ else:
     outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx = master.drop(['first','last','initials'], axis=1)
-xlsx = xlsx.merge(kathy, how='left', on='uid')
+if 'alexid' in filename:
+    xlsx = xlsx.merge(kathy, how='left', on='uid')
 
 #%% Identify possible false negatives
 ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
