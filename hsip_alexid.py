@@ -21,9 +21,8 @@ pd.options.mode.chained_assignment = None # suppress SettingWithCopyWarning
 
 #%%
 def standardize_ssn(df):
-    if df['ssn'].dtype == 'float':
-        tf = df['ssn'].notnull()
-        df.loc[tf,'ssn'] = df.loc[tf,'ssn'].apply(lambda x: f'{x:.0f}') # change to 0>9
+    df['ssn'].fillna('000000000', inplace=True)
+    df['ssn'] = df['ssn'].astype(int).map(lambda x: f'{x:0>9}')
     return df
 
 def standardize_name(df):
@@ -174,14 +173,14 @@ def parse_name(df):
         names.append((nom.first, nom.last))
     return pd.DataFrame(names, columns=['first','last'])
 
-df['name_'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
+df['name_'] = df['name'].str.upper().str.replace(' - ','-').str.replace('-',' ')
 names = parse_name(df)
 df = df.merge(names, left_index=True, right_index=True)
 
 #%% create dataframe for linking
 df['initials'] = df['first'].str[0] + df['last'].str[0]
 df_linkage = df[['first','last','initials','email_','ssn','address_']]
-df_linkage['ssn'] = df_linkage['ssn'].map(lambda x: f'{x:0>9}')
+#df_linkage['ssn'] = df_linkage['ssn'].map(lambda x: f'{x:0>9}')
 df_linkage.replace({'ssn':ssn_dict,'address_':address_dict}, inplace=True)
 
 #%%
@@ -283,15 +282,18 @@ if 'alexid' in filename:
 
 #%%
 def get_count(data):
-    name_ct = len(set(data['name'].astype(str)))
+    name_ct = len(set(data['name_']))
     email_ct = len(set(data['email_'].astype(str)))
-    ssn_ct = len(set(data['ssn'].astype(str)))
-    address_ct = len(set(data['address_'].astype(str)))
+    ssn_ct = len(set(data['ssn']))
+    address_ct = len(set(data['address_']))
     return (name_ct, email_ct, ssn_ct, address_ct)
 
 total = master.groupby('alexid')['amt'].sum().to_frame()
 total.columns = ['total']
 t3 = time.time()
+assert master['name_'].notnull().all()
+assert master['ssn'].notnull().all()
+assert master['address_'].notnull().all()
 cts = master.groupby('alexid').apply(get_count)
 t4 = time.time()
 counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','email_ct','ssn_ct','address_ct'])
@@ -305,9 +307,9 @@ print(f'Adding Count Data {t4-t3:.1f} sec')
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
 # formatting output
-master['name'] = master['name'].str.upper() # future delete
-master['ssn'].fillna('000000000', inplace=True)
-master['ssn'] = master['ssn'].map(lambda x: f'{x:0>9}')
+#master['name'] = master['name'].str.upper() # future delete
+#master['ssn'].fillna('000000000', inplace=True)
+#master['ssn'] = master['ssn'].map(lambda x: f'{x:0>9}')
 df_date = master.select_dtypes(include='datetime')
 if 'date' in df_date.columns:
     master['date'] = master['date'].dt.strftime('%m-%d-%Y')
@@ -351,11 +353,9 @@ email_set = set(email_suspects.index)
 wb4 = xlsx[xlsx['email_'].isin(email_set)]
 wb4.sort_values(['email_','alexid'], inplace=True)
 
-xlsx.drop(['address_','email_','name_'], axis=1, inplace=True)
-wb1.drop(['address_','email_','name_'], axis=1, inplace=True)
-wb2.drop(['address_','email_','name_'], axis=1, inplace=True)
-wb3.drop(['address_','email_','name_'], axis=1, inplace=True)
-wb4.drop(['address_','email_','name_'], axis=1, inplace=True)
+sheets = [xlsx, wb1, wb2, wb3, wb4]
+for sheet in sheets:
+    sheet.drop(['name_','address_','email_'], axis=1, inplace=True)
    
 print('ssn', ssn_suspects.shape) 
 print('name', name_suspects.shape)
@@ -363,6 +363,7 @@ print('address', address_suspects.shape)
 print('email', email_suspects.shape)
 
 #%%
+t5 = time.time()
 xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
 invalid_records.to_excel(writer, 'invalid_rows', index=False)
 wb1.to_excel(writer, 'same_ssn_diff_alexid', index=False)
@@ -370,4 +371,4 @@ wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
 wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
 wb4.to_excel(writer, 'same_email_diff_alexid', index=False)
 writer.save()
-print('{} created'.format(outputfile))
+print(f'{outputfile} created in {time.time()-t5:.0f} sec'.format(outputfile))
