@@ -22,10 +22,13 @@ pd.options.mode.chained_assignment = None # suppress SettingWithCopyWarning
 #%%
 def standardize_ssn(df):
     df['ssn'].fillna('000000000', inplace=True)
+    df['ssn'] = df['ssn'].astype(str).str.replace('-','')
     df['ssn'] = df['ssn'].astype(int).map(lambda x: f'{x:0>9}')
     return df
 
 def standardize_name(df):
+    tf = (df_input['address_1'].isnull()) & (df_input['address_2'].notnull())
+    df.loc[tf,['address_1','address_2']] = df.loc[tf,['address_2','address_1']].values
     df['name'].fillna('', inplace=True) # check for blank names
     tf = df['name'].str.contains('@')
     df.loc[tf,'email'] = df.loc[tf,'name'] # assign email to correct column
@@ -34,18 +37,20 @@ def standardize_name(df):
     regex_punct = re.compile(rf'[{name_invalid_punctuation}]')
     regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|MHS|)\b')
     tmp = df['name'].apply(lambda x: re.sub(regex_punct, '', x))
-    df['name'] = tmp.apply(lambda x: re.sub(regex_titles, '', x).strip(' '))
+    df['name'] = tmp.apply(lambda x: re.sub(regex_titles, '', x).strip(' ').upper() )
     df['name'].replace({'': None}, inplace=True)
     return df
 
 def standardize_address(df):
+    tf = (df_input['address_1'].isnull()) & (df_input['address_2'].notnull())
+    df.loc[tf,['address_1','address_2']] = df.loc[tf,['address_2','address_1']].values    
     df['address_1'].fillna('', inplace=True) # check for blank addresses
     tf = df['address_1'].str.contains('@')
     df.loc[tf,'email'] = df.loc[tf,'address_1'] # assign email to correct column
     df.loc[tf,'address_1'] = ''
     address_invalid_punctuation = re.sub(r'[-&#/@]','',string.punctuation)
     regex_punct = re.compile(rf'[{address_invalid_punctuation}]')
-    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex_punct, '', x).strip() )
+    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex_punct, '', x).strip().upper() )
     df['address_1'].replace({'': None}, inplace=True)
     return df
 
@@ -59,9 +64,10 @@ def standardize_email(df):
 #%%    
 wdir = r'X:\HSIP'
 filename = 'New_alex_id_HSIP_2018_Dec_to_CSCAR_alexid.xlsx'
+filename = 'All_Combined_2018_to_CSCAR_alexid.xlsx'
 df_input = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
 if 'alexid' in filename:
-    df_input.rename(columns={'NEW ALEX ID':'new_alexid'}, inplace=True)
+#    df_input.rename(columns={'NEW ALEX ID':'new_alexid'}, inplace=True)
     df_raw = df_input.loc[:,'hsip':'uid']
     kathy = df_input[['uid','new_alexid','TIN MATCH','NOTES']]
     invalid_records = pd.read_excel(os.path.join(wdir,filename), sheet_name='invalid_rows')
@@ -129,12 +135,20 @@ score['uid'] = df_rawext['uid']
 
 keep_rows = score['total'] >= 2
 df = df_rawext[keep_rows].reset_index(drop=True)
-if 'alexid' not in filename:
+if 'alexid' in filename:
+    invalid_records = invalid_records.append(df_rawext[~keep_rows])
+else:
     invalid_records = df_rawext[~keep_rows]
 
 #%% data wrangling for matching purposes
 # swap c/o address_1 with address_2
-careof = df['address_1'].apply(lambda x: 'C/O' in x)
+def look4careof(address):
+    if address:
+        if 'C/O' in address:
+            return True
+    return False
+    
+careof = df['address_1'].astype(str).apply(look4careof)
 df.loc[careof,['address_1','address_2']] = df.loc[careof,['address_2','address_1']].values
 # add address_1 and address_2 for numbers only address_1
 numbersonly = df['address_1'].str.isnumeric()
@@ -173,7 +187,7 @@ def parse_name(df):
         names.append((nom.first, nom.last))
     return pd.DataFrame(names, columns=['first','last'])
 
-df['name_'] = df['name'].str.upper().str.replace(' - ','-').str.replace('-',' ')
+df['name_'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
 names = parse_name(df)
 df = df.merge(names, left_index=True, right_index=True)
 
@@ -222,9 +236,9 @@ def create_index_pairs(df, columns):
     return pd.MultiIndex.from_tuples(pairs)
 
 def score_calculation(df):    
-    df['name'] = 0.5*df['first'] + 0.5*df['last']
-    df = df[['name','email_','ssn','address_']]       
-    df['total'] = df.sum(axis=1)
+#    df['name'] = 0.5*df['first'] + 0.5*df['last']
+#    df = df[['name','email_','ssn','address_']]       
+    df['total'] = 0.5*df['first'] + 0.5*df['last'] + 1.5*df['email_'] + df['ssn'] + df['address_']
     df.reset_index(inplace=True)
     df.rename(columns={'level_0':'rec1','level_1':'rec2'}, inplace=True)
     df.sort_values(['total','rec1','rec2'], ascending=[False,True,True], inplace=True)
@@ -274,18 +288,22 @@ master = pd.concat([alex, singletons], ignore_index=False)
 
 #%% manually override alexid with new alexid
 if 'alexid' in filename:
-    df_override = kathy[kathy['new_alexid'] > 1e9]
+    df_override = kathy[kathy['new_alexid'] > 1e6]
+    n = 0
     for row in df_override.itertuples():
-        master.loc[master['uid'] == row.uid,'alexid'] = row.new_alexid
+        oldid = master.loc[master['uid'] == row.uid,'alexid']
         assert sum(master['uid'] == row.uid) == 1
-    print(f'Replaced {df_override.shape[0]} rows with new alexid')        
+        ids = labels_rev[oldid.iat[0]]
+        master.loc[ids,'alexid'] = row.new_alexid
+        n += len(ids)
+    print(f'Replaced {n} rows with new alexid')        
 
 #%%
 def get_count(data):
     name_ct = len(set(data['name_']))
     email_ct = len(set(data['email_'].astype(str)))
     ssn_ct = len(set(data['ssn']))
-    address_ct = len(set(data['address_']))
+    address_ct = len(set(data['address_'].astype(str)))
     return (name_ct, email_ct, ssn_ct, address_ct)
 
 total = master.groupby('alexid')['amt'].sum().to_frame()
@@ -293,7 +311,6 @@ total.columns = ['total']
 t3 = time.time()
 assert master['name_'].notnull().all()
 assert master['ssn'].notnull().all()
-assert master['address_'].notnull().all()
 cts = master.groupby('alexid').apply(get_count)
 t4 = time.time()
 counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','email_ct','ssn_ct','address_ct'])
@@ -318,7 +335,7 @@ if 'entered' in df_date.columns:
 
 #%%
 if 'alexid' in filename:
-    outputfile = filename.replace('alexid','alexid2')
+    outputfile = filename.replace('alexid','alexidv2')
 else:
     outputfile = filename.replace('.xlsx','_alexid.xlsx')
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
