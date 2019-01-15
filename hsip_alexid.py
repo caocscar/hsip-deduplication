@@ -35,7 +35,7 @@ def standardize_name(df):
     df.loc[tf,'name'] = ''
     name_invalid_punctuation = re.sub(r'[-&]','',string.punctuation)
     regex_punct = re.compile(rf'[{name_invalid_punctuation}]')
-    regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MS|MHS|)\b')
+    regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MHS|)\b')
     tmp = df['name'].apply(lambda x: re.sub(regex_punct, '', x))
     df['name'] = tmp.apply(lambda x: re.sub(regex_titles, '', x).strip(' ').upper() )
     df['name'].replace({'': None}, inplace=True)
@@ -63,7 +63,6 @@ def standardize_email(df):
 
 #%%    
 wdir = r'X:\HSIP'
-filename = 'New_alex_id_HSIP_2018_Dec_to_CSCAR_alexid.xlsx'
 filename = 'All_Combined_2018_to_CSCAR_alexid.xlsx'
 df_input = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
 if 'alexid' in filename:
@@ -85,6 +84,7 @@ else:
 df_raw = standardize_ssn(df_raw)
 df_raw = standardize_name(df_raw)
 df_raw = standardize_address(df_raw)
+df_raw = standardize_email(df_raw)
 if 'uid' not in df_raw.columns:
     df_raw['uid'] = df_raw.index + 1
     df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>6}')
@@ -113,15 +113,19 @@ ssn_dict = {ssn:None for ssn in ssn_list}
 address_list = list(Rules.loc[Rules['column'] == 'address_1','value'])
 address_dict = {addr.replace(' ','').lower():None for addr in address_list}
 
+email_list = list(Rules.loc[Rules['column'] == 'email','value'])
+email_dict = {email.lower():None for email in email_list}
+
 rules_dict = defaultdict(list)
 for col, rule in Rules.groupby('column'):
     rules_dict[col] = rule['value'].tolist()
-rules_dict['email'] = []
 
 list_k = []   
 for col, invalid_entries in rules_dict.items():
     if col == 'email':
-        valid = df_rawext['email'].str.contains('@') & df_rawext['email'].notnull()
+        rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
+        rule2 = df_rawext[col].str.contains('@') & df_rawext[col].notnull()
+        valid = (~rule1) & rule2
     else:
         rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
         valid = ~rule1
@@ -194,8 +198,10 @@ df = df.merge(names, left_index=True, right_index=True)
 #%% create dataframe for linking
 df['initials'] = df['first'].str[0] + df['last'].str[0]
 df_linkage = df[['first','last','initials','email_','ssn','address_']]
-#df_linkage['ssn'] = df_linkage['ssn'].map(lambda x: f'{x:0>9}')
-df_linkage.replace({'ssn':ssn_dict,'address_':address_dict}, inplace=True)
+df_linkage.replace({'ssn':ssn_dict,
+                    'address_':address_dict,
+                    'email_':email_dict,
+                    }, inplace=True)
 
 #%%
 def get_rules(columns):
@@ -352,21 +358,20 @@ wb1.sort_values(['ssn','alexid'], inplace=True)
 
 name_alexid = xlsx.groupby('name_')['alexid'].nunique()
 name_suspects = name_alexid[name_alexid > 1]
-name_list = list(Rules.loc[Rules['column'] == 'name_','value'])
+name_list = list(Rules.loc[Rules['column'] == 'name','value'])
 name_set = set(name_suspects.index) - set(name_list)
 wb2 = xlsx[xlsx['name_'].isin(name_set)]
 wb2.sort_values(['name_','alexid'], inplace=True)
 
 address_alexid = xlsx.groupby('address_')['alexid'].nunique()
 address_suspects = address_alexid[address_alexid > 1]
-address_list = list(Rules.loc[Rules['column'] == 'name','value'])
-address_set = set(address_suspects.index) - set(address_list)
+address_set = set(address_suspects.index) - set(address_dict.keys())
 wb3 = xlsx[xlsx['address_'].isin(address_set)]
 wb3.sort_values(['address_','alexid'], inplace=True)
 
 email_alexid = xlsx.groupby('email_')['alexid'].nunique()
 email_suspects = email_alexid[email_alexid > 1]
-email_set = set(email_suspects.index)
+email_set = set(email_suspects.index) - set(email_dict.keys())
 wb4 = xlsx[xlsx['email_'].isin(email_set)]
 wb4.sort_values(['email_','alexid'], inplace=True)
 
