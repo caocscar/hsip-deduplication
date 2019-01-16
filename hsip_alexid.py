@@ -147,6 +147,7 @@ else:
     invalid_records = df_rawext[~keep_rows]
 
 #%% data wrangling for matching purposes
+# Address Section
 # swap c/o address_1 with address_2
 def look4careof(address):
     if address:
@@ -176,6 +177,7 @@ suffix_dict = {rf'\b{x[0]}\b':x[1] for x in suffix}
 df['address_'] = df['address_1'].replace(suffix_dict, regex=True)
 df['address_'] = df['address_'].str.replace(' ','').str.replace(',','').str.lower()
 
+# Email Section
 regex_email = re.compile('^([^@]+)@?', flags=re.IGNORECASE)
 
 def get_local_part(x):
@@ -186,12 +188,13 @@ def get_local_part(x):
 tf = df['email'].notnull()
 df.loc[tf,'email_'] = df.loc[tf,'email'].apply(get_local_part)
 
+# Name Section
 def parse_name(df):
     names = []
     for row in df.itertuples():
         nom = HumanName(row.name_)
         names.append((nom.first, nom.last))
-    return pd.DataFrame(names, columns=['first','last'])
+    return pd.DataFrame(names, index=df.index, columns=['first','last'])
 
 df['name_'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
 names = parse_name(df)
