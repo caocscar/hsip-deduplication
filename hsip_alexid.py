@@ -19,6 +19,8 @@ pd.options.display.max_rows = 16
 pd.options.display.max_columns = 25
 pd.options.mode.chained_assignment = None # suppress SettingWithCopyWarning
 
+t0 = time.time()
+
 #%%
 def standardize_ssn(df):
     df['ssn'].fillna('000000000', inplace=True)
@@ -138,7 +140,7 @@ score['total'] = score.sum(axis=1)
 score['uid'] = df_rawext['uid']
 
 keep_rows = score['total'] >= 2
-df = df_rawext[keep_rows].reset_index(drop=True)
+df = df_rawext[keep_rows]
 if 'alexid' in filename:
     invalid_records = invalid_records.append(df_rawext[~keep_rows])
 else:
@@ -295,14 +297,8 @@ master = pd.concat([alex, singletons], ignore_index=False)
 #%% manually override alexid with new alexid
 if 'alexid' in filename:
     df_override = kathy[kathy['new_alexid'] > 1e6]
-    n = 0
-    for row in df_override.itertuples():
-        oldid = master.loc[master['uid'] == row.uid,'alexid']
-        assert sum(master['uid'] == row.uid) == 1
-        ids = labels_rev[oldid.iat[0]]
-        master.loc[ids,'alexid'] = row.new_alexid
-        n += len(ids)
-    print(f'Replaced {n} rows with new alexid')        
+    master.loc[df_override.index,'alexid'] = df_override['new_alexid']
+    print(f'Replaced {df_override.shape[0]} rows with new alexid')        
 
 #%%
 def get_count(data):
@@ -393,4 +389,5 @@ wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
 wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
 wb4.to_excel(writer, 'same_email_diff_alexid', index=False)
 writer.save()
-print(f'{outputfile} created in {time.time()-t5:.0f} sec'.format(outputfile))
+print(f'{outputfile} created in {time.time()-t5:.0f} sec')
+print(f'This whole process took too long: {time.time()-t0:.0f} sec')
