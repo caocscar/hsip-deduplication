@@ -198,10 +198,10 @@ def parse_name(df):
 
 df['name_'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
 names = parse_name(df)
+names['initials'] = names['first'].str[0] + names['last'].str[0]
 df = df.merge(names, left_index=True, right_index=True)
 
 #%% create dataframe for linking
-df['initials'] = df['first'].str[0] + df['last'].str[0]
 df_linkage = df[['first','last','initials','email_','ssn','address_']]
 df_linkage.replace({'ssn':ssn_dict,
                     'address_':address_dict,
@@ -223,7 +223,7 @@ def get_rules(columns):
     if 'address_' not in columns:
         rules.string('address_', 'address_', label='address_', method='jarowinkler', threshold=threshold)
     if 'email_' not in columns:
-        rules.string('email_', 'email_', label='email_', method='jarowinkler', threshold=threshold)
+        rules.exact('email_', 'email_', label='email_')
     for col in columns:
         rules.exact(col, col, label=col)
     return rules
