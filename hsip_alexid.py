@@ -67,11 +67,13 @@ def standardize_email(df):
 #%%    
 wdir = r'X:\HSIP'
 filename = 'All_Combined_2018_to_CSCAR_alexid.xlsx'
-df_input = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
+sheet_dict = pd.read_excel(os.path.join(wdir,filename), sheet_name=None)
+sheet_names = list(sheet_dict.keys())
+df_input = sheet_dict[sheet_names[0]]
 if 'alexid' in filename:
     df_raw = df_input.loc[:,'hsip':'AP Control']
     kathy = df_input[['AP Control','new_alexid','TIN MATCH','NOTES']]
-    invalid_records = pd.read_excel(os.path.join(wdir,filename), sheet_name='invalid_rows')
+    invalid_records = sheet_dict['invalid_rows']
 else:
     df_raw = df_input.copy()
 #cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
@@ -107,7 +109,7 @@ print(f'Read and standardization took {time.time()-t0:.1f} sec')
 #df_ext = standardize_ssn(df_ext)
 #    
 #df_rawext = pd.concat([df_raw, df_ext], ignore_index=True)
-df_rawext = df_raw.copy()
+#df_rawext = df_raw.copy()
 
 #%% Filter dataset based on rules.txt
 ssn_list = list(Rules.loc[Rules['column'] == 'ssn','value'])
@@ -126,11 +128,11 @@ for col, rule in Rules.groupby('column'):
 list_k = []   
 for col, invalid_entries in rules_dict.items():
     if col == 'email':
-        rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
-        rule2 = df_rawext[col].str.contains('@') & df_rawext[col].notnull()
+        rule1 = df_raw[col].isin(invalid_entries) | df_raw[col].isnull()
+        rule2 = df_raw[col].str.contains('@') & df_raw[col].notnull()
         valid = (~rule1) & rule2
     else:
-        rule1 = df_rawext[col].isin(invalid_entries) | df_rawext[col].isnull()
+        rule1 = df_raw[col].isin(invalid_entries) | df_raw[col].isnull()
         valid = ~rule1
     list_k.append(valid)
 columns = pd.concat(list_k, axis=1)
@@ -138,14 +140,14 @@ columns = columns.astype(int)
 
 score = columns[['name','email','ssn','address_1']]
 score['total'] = score.sum(axis=1)
-score['AP Control'] = df_rawext['AP Control']
+score['AP Control'] = df_raw['AP Control']
 
 keep_rows = score['total'] >= 2
-df = df_rawext[keep_rows]
+df = df_raw[keep_rows]
 if 'alexid' in filename:
-    invalid_records = invalid_records.append(df_rawext[~keep_rows])
+    invalid_records = invalid_records.append(df_raw[~keep_rows])
 else:
-    invalid_records = df_rawext[~keep_rows]
+    invalid_records = df_raw[~keep_rows]
 
 #%% data wrangling for matching purposes
 # Address Section
