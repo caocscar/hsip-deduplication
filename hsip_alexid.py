@@ -25,6 +25,7 @@ t0 = time.time()
 def standardize_ssn(df):
     df['ssn'].fillna('000000000', inplace=True)
     df['ssn'] = df['ssn'].astype(str).str.replace('-','')
+    df['ssn'] = df['ssn'].str.replace('111111111','000000000')
     df['ssn'] = df['ssn'].astype(int).map(lambda x: f'{x:0>9}')
     return df
 
@@ -92,6 +93,7 @@ if 'uid' not in df_raw.columns:
     df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>6}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
+print(f'Read and standardization took {time.time()-t0:.1f} sec')
 
 #%% additional files
 #df_extra = pd.read_excel('JAN_MAR_HSIP_AWARD_MSTR_COPY.xlsx', sheet_name=None)
@@ -296,6 +298,8 @@ singletons = dakota[dakota['alexid'].isnull()]
 singletons.dropna(axis=1, how='all', inplace=True)
 singletons['alexid'] = range(maxid, maxid+singletons.shape[0])
 master = pd.concat([alex, singletons], ignore_index=False)
+assert master['name_'].notnull().all()
+assert master['ssn'].notnull().all()
 
 #%% manually override alexid with new alexid
 if 'alexid' in filename:
@@ -304,27 +308,25 @@ if 'alexid' in filename:
     print(f'Replaced {df_override.shape[0]} rows with new alexid')        
 
 #%%
-def get_count(data):
-    name_ct = len(set(data['name_']))
-    email_ct = len(set(data['email_'].astype(str)))
-    ssn_ct = len(set(data['ssn']))
-    address_ct = len(set(data['address_'].astype(str)))
-    return (name_ct, email_ct, ssn_ct, address_ct)
-
-total = master.groupby('alexid')['amt'].sum().to_frame()
-total.columns = ['total']
-t3 = time.time()
-assert master['name_'].notnull().all()
-assert master['ssn'].notnull().all()
-cts = master.groupby('alexid').apply(get_count)
-t4 = time.time()
-counts = pd.DataFrame(cts.tolist(), index=cts.index, columns=['name_ct','email_ct','ssn_ct','address_ct'])
-counts['ct_sum'] = counts.sum(axis=1)
-total_cts = pd.concat([total, counts], axis=1)
+def get_total_and_counts(master):
+    name_ct = master.groupby('alexid')['name_'].nunique(dropna=False)
+    email_ct = master.groupby('alexid')['email_'].nunique(dropna=False)
+    ssn_ct = master.groupby('alexid')['ssn'].nunique(dropna=False)
+    address_ct = master.groupby('alexid')['address_'].nunique(dropna=False)
+    total = master.groupby('alexid')['amt'].sum()
+    df = pd.DataFrame({'name_ct':name_ct,
+                        'email_ct':email_ct,
+                        'ssn_ct':ssn_ct,
+                        'address_ct':address_ct,
+                        })
+    df['ct_sum'] = df.sum(axis=1)
+    df.insert(0,'total',total)
+    return df
+    
+total_cts = get_total_and_counts(master)
 master = master.merge(total_cts, how='left', left_on='alexid', right_index=True)
 master = master.sort_values(['alexid','date'], ascending=[True,False])
 master['record'] = master.groupby('alexid').cumcount() + 1
-print(f'Adding Count Data {t4-t3:.1f} sec')
 
 #%%
 master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
@@ -352,45 +354,60 @@ if 'alexid' in filename:
 ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
 ssn_suspects = ssn_alexid[ssn_alexid > 1]
 ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
-wb1 = xlsx[xlsx['ssn'].isin(ssn_set)]
-wb1.sort_values(['ssn','alexid'], inplace=True)
+ssn_flag = xlsx['ssn'].isin(ssn_set)
+xlsx.loc[ssn_flag,'same_ssn_diff_alexid'] = 1
+#wb1 = xlsx[xlsx['ssn'].isin(ssn_set)]
+#wb1.sort_values(['ssn','alexid'], inplace=True)
 
 name_alexid = xlsx.groupby('name_')['alexid'].nunique()
 name_suspects = name_alexid[name_alexid > 1]
 name_list = list(Rules.loc[Rules['column'] == 'name','value'])
 name_set = set(name_suspects.index) - set(name_list)
-wb2 = xlsx[xlsx['name_'].isin(name_set)]
-wb2.sort_values(['name_','alexid'], inplace=True)
+name_flag = xlsx['name_'].isin(name_set)
+xlsx.loc[name_flag,'same_name_diff_alexid'] = 1
+#wb2 = xlsx[xlsx['name_'].isin(name_set)]
+#wb2.sort_values(['name_','alexid'], inplace=True)
 
 address_alexid = xlsx.groupby('address_')['alexid'].nunique()
 address_suspects = address_alexid[address_alexid > 1]
 address_set = set(address_suspects.index) - set(address_dict.keys())
-wb3 = xlsx[xlsx['address_'].isin(address_set)]
-wb3.sort_values(['address_','alexid'], inplace=True)
+address_flag = xlsx['address_'].isin(address_set)
+xlsx.loc[address_flag,'same_address1_diff_alexid'] = 1
+#wb3 = xlsx[xlsx['address_'].isin(address_set)]
+#wb3.sort_values(['address_','alexid'], inplace=True)
 
 email_alexid = xlsx.groupby('email_')['alexid'].nunique()
 email_suspects = email_alexid[email_alexid > 1]
 email_set = set(email_suspects.index) - set(email_dict.keys())
-wb4 = xlsx[xlsx['email_'].isin(email_set)]
-wb4.sort_values(['email_','alexid'], inplace=True)
+email_flag = xlsx['email_'].isin(email_set)
+xlsx.loc[email_flag,'same_email_diff_alexid'] = 1
+#wb4 = xlsx[xlsx['email_'].isin(email_set)]
+#wb4.sort_values(['email_','alexid'], inplace=True)
 
-sheets = [xlsx, wb1, wb2, wb3, wb4]
-for sheet in sheets:
-    sheet.drop(['name_','address_','email_'], axis=1, inplace=True)
-   
+#sheets = [xlsx, wb1, wb2, wb3, wb4]
+#for sheet in sheets:
+#    sheet.drop(['name_','address_','email_'], axis=1, inplace=True)
+xlsx.drop(['name_','address_','email_'], axis=1, inplace=True)
+
 print('ssn', ssn_suspects.shape) 
 print('name', name_suspects.shape)
 print('address', address_suspects.shape)
 print('email', email_suspects.shape)
 
+xlsx.rename(columns={'uid':'AP Control',
+                     'alexid':'rollup_id',
+                     'total':'total_rollup',
+                     'record':'rollup_rank',
+                     }, inplace=True)
+
 #%%
 t5 = time.time()
 xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
 invalid_records.to_excel(writer, 'invalid_rows', index=False)
-wb1.to_excel(writer, 'same_ssn_diff_alexid', index=False)
-wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
-wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
-wb4.to_excel(writer, 'same_email_diff_alexid', index=False)
+#wb1.to_excel(writer, 'same_ssn_diff_alexid', index=False)
+#wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
+#wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
+#wb4.to_excel(writer, 'same_email_diff_alexid', index=False)
 writer.save()
 print(f'{outputfile} created in {time.time()-t5:.0f} sec')
 print(f'This whole process took too long: {time.time()-t0:.0f} sec')
