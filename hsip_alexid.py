@@ -69,9 +69,8 @@ wdir = r'X:\HSIP'
 filename = 'All_Combined_2018_to_CSCAR_alexid.xlsx'
 df_input = pd.read_excel(os.path.join(wdir,filename), sheet_name=0)
 if 'alexid' in filename:
-#    df_input.rename(columns={'NEW ALEX ID':'new_alexid'}, inplace=True)
-    df_raw = df_input.loc[:,'hsip':'uid']
-    kathy = df_input[['uid','new_alexid','TIN MATCH','NOTES']]
+    df_raw = df_input.loc[:,'hsip':'AP Control']
+    kathy = df_input[['AP Control','new_alexid','TIN MATCH','NOTES']]
     invalid_records = pd.read_excel(os.path.join(wdir,filename), sheet_name='invalid_rows')
 else:
     df_raw = df_input.copy()
@@ -88,9 +87,9 @@ df_raw = standardize_ssn(df_raw)
 df_raw = standardize_name(df_raw)
 df_raw = standardize_address(df_raw)
 df_raw = standardize_email(df_raw)
-if 'uid' not in df_raw.columns:
-    df_raw['uid'] = df_raw.index + 1
-    df_raw['uid'] = df_raw['uid'].apply(lambda x: f'HSIPDEC{x:0>6}')
+#if 'AP Control' not in df_raw.columns:
+#    df_raw['AP Control'] = df_raw.index + 1
+#    df_raw['AP Control'] = df_raw['AP Control'].apply(lambda x: f'HSIPDEC{x:0>6}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
 print(f'Read and standardization took {time.time()-t0:.1f} sec')
@@ -100,8 +99,8 @@ print(f'Read and standardization took {time.time()-t0:.1f} sec')
 #list_df = []
 #sheets = ['HSIPJAN','HSIPMAR','AWARDJAN','AWARDMAR']
 #for df, sheet in zip(df_extra.values(), sheets):
-#    df['uid'] = df.index + 2
-#    df['uid'] = df['uid'].apply(lambda x: f'{sheet}{x:0>5}')
+#    df['AP Control'] = df.index + 2
+#    df['AP Control'] = df['AP Control'].apply(lambda x: f'{sheet}{x:0>5}')
 #    list_df.append(df)
 #df_ext = pd.concat(list_df, ignore_index=True, sort=False)
 #df_ext.dropna(axis=1, how='all', inplace=True)
@@ -139,7 +138,7 @@ columns = columns.astype(int)
 
 score = columns[['name','email','ssn','address_1']]
 score['total'] = score.sum(axis=1)
-score['uid'] = df_rawext['uid']
+score['AP Control'] = df_rawext['AP Control']
 
 keep_rows = score['total'] >= 2
 df = df_rawext[keep_rows]
@@ -249,8 +248,6 @@ def create_index_pairs(df, columns):
     return pd.MultiIndex.from_tuples(pairs)
 
 def score_calculation(df):    
-#    df['name'] = 0.5*df['first'] + 0.5*df['last']
-#    df = df[['name','email_','ssn','address_']]       
     df['total'] = 0.5*df['first'] + 0.5*df['last'] + 1.5*df['email_'] + df['ssn'] + df['address_']
     df.reset_index(inplace=True)
     df.rename(columns={'level_0':'rec1','level_1':'rec2'}, inplace=True)
@@ -320,20 +317,17 @@ def get_total_and_counts(master):
                         'address_ct':address_ct,
                         })
     df['ct_sum'] = df.sum(axis=1)
-    df.insert(0,'total',total)
+    df.insert(0,'total_rollup',total)
     return df
     
 total_cts = get_total_and_counts(master)
 master = master.merge(total_cts, how='left', left_on='alexid', right_index=True)
 master = master.sort_values(['alexid','date'], ascending=[True,False])
-master['record'] = master.groupby('alexid').cumcount() + 1
+master['rollup_rank'] = master.groupby('alexid').cumcount() + 1
 
 #%%
-master.sort_values(['total','alexid','record'], ascending=[False,True,True], inplace=True)
+master.sort_values(['total_rollup','alexid','rollup_rank'], ascending=[False,True,True], inplace=True)
 # formatting output
-#master['name'] = master['name'].str.upper() # future delete
-#master['ssn'].fillna('000000000', inplace=True)
-#master['ssn'] = master['ssn'].map(lambda x: f'{x:0>9}')
 df_date = master.select_dtypes(include='datetime')
 if 'date' in df_date.columns:
     master['date'] = master['date'].dt.strftime('%m-%d-%Y')
@@ -348,7 +342,7 @@ else:
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx = master.drop(['first','last','initials'], axis=1)
 if 'alexid' in filename:
-    xlsx = xlsx.merge(kathy, how='left', on='uid')
+    xlsx = xlsx.merge(kathy, how='left', on='AP Control')
 
 #%% Identify possible false negatives
 ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
@@ -356,8 +350,6 @@ ssn_suspects = ssn_alexid[ssn_alexid > 1]
 ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
 ssn_flag = xlsx['ssn'].isin(ssn_set)
 xlsx.loc[ssn_flag,'same_ssn_diff_alexid'] = 1
-#wb1 = xlsx[xlsx['ssn'].isin(ssn_set)]
-#wb1.sort_values(['ssn','alexid'], inplace=True)
 
 name_alexid = xlsx.groupby('name_')['alexid'].nunique()
 name_suspects = name_alexid[name_alexid > 1]
@@ -365,28 +357,19 @@ name_list = list(Rules.loc[Rules['column'] == 'name','value'])
 name_set = set(name_suspects.index) - set(name_list)
 name_flag = xlsx['name_'].isin(name_set)
 xlsx.loc[name_flag,'same_name_diff_alexid'] = 1
-#wb2 = xlsx[xlsx['name_'].isin(name_set)]
-#wb2.sort_values(['name_','alexid'], inplace=True)
 
 address_alexid = xlsx.groupby('address_')['alexid'].nunique()
 address_suspects = address_alexid[address_alexid > 1]
 address_set = set(address_suspects.index) - set(address_dict.keys())
 address_flag = xlsx['address_'].isin(address_set)
 xlsx.loc[address_flag,'same_address1_diff_alexid'] = 1
-#wb3 = xlsx[xlsx['address_'].isin(address_set)]
-#wb3.sort_values(['address_','alexid'], inplace=True)
 
 email_alexid = xlsx.groupby('email_')['alexid'].nunique()
 email_suspects = email_alexid[email_alexid > 1]
 email_set = set(email_suspects.index) - set(email_dict.keys())
 email_flag = xlsx['email_'].isin(email_set)
 xlsx.loc[email_flag,'same_email_diff_alexid'] = 1
-#wb4 = xlsx[xlsx['email_'].isin(email_set)]
-#wb4.sort_values(['email_','alexid'], inplace=True)
 
-#sheets = [xlsx, wb1, wb2, wb3, wb4]
-#for sheet in sheets:
-#    sheet.drop(['name_','address_','email_'], axis=1, inplace=True)
 xlsx.drop(['name_','address_','email_'], axis=1, inplace=True)
 
 print('ssn', ssn_suspects.shape) 
@@ -394,20 +377,12 @@ print('name', name_suspects.shape)
 print('address', address_suspects.shape)
 print('email', email_suspects.shape)
 
-xlsx.rename(columns={'uid':'AP Control',
-                     'alexid':'rollup_id',
-                     'total':'total_rollup',
-                     'record':'rollup_rank',
-                     }, inplace=True)
+xlsx.rename(columns={'alexid':'rollup_id'}, inplace=True)
 
 #%%
 t5 = time.time()
 xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
 invalid_records.to_excel(writer, 'invalid_rows', index=False)
-#wb1.to_excel(writer, 'same_ssn_diff_alexid', index=False)
-#wb2.to_excel(writer, 'same_name_diff_alexid', index=False)
-#wb3.to_excel(writer, 'same_address1_diff_alexid', index=False)
-#wb4.to_excel(writer, 'same_email_diff_alexid', index=False)
 writer.save()
 print(f'{outputfile} created in {time.time()-t5:.0f} sec')
 print(f'This whole process took too long: {time.time()-t0:.0f} sec')
