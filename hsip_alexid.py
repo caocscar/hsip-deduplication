@@ -26,7 +26,8 @@ def standardize_ssn(df):
     df['ssn'].fillna('000000000', inplace=True)
     df['ssn'] = df['ssn'].astype(str).str.replace('-','')
     df['ssn'] = df['ssn'].str.replace('111111111','000000000')
-    df['ssn'] = df['ssn'].astype(int).map(lambda x: f'{x:0>9}')
+    df['ssn'] = df['ssn'].str.replace('.0','')
+    df['ssn'] = df['ssn'].str.zfill(9)
     return df
 
 def standardize_name(df):
@@ -66,13 +67,14 @@ def standardize_email(df):
 
 #%%    
 wdir = r'X:\HSIP'
-filename = 'All_Combined_2018_to_CSCAR_alexid.xlsx'
+filename = '20190125_rev_alexid.xlsx'
 sheet_dict = pd.read_excel(os.path.join(wdir,filename), sheet_name=None)
+print(f'Read and standardization took {time.time()-t0:.1f} sec')
 sheet_names = list(sheet_dict.keys())
 df_input = sheet_dict[sheet_names[0]]
 if 'alexid' in filename:
     df_raw = df_input.loc[:,'hsip':'AP Control']
-    kathy = df_input[['AP Control','new_alexid','TIN MATCH','NOTES']]
+    kathy = df_input[['AP Control','new_rollupid','TIN MATCH','NOTES']]
     invalid_records = sheet_dict['invalid_rows']
 else:
     df_raw = df_input.copy()
@@ -94,7 +96,6 @@ df_raw = standardize_email(df_raw)
 #    df_raw['AP Control'] = df_raw['AP Control'].apply(lambda x: f'HSIPDEC{x:0>6}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
-print(f'Read and standardization took {time.time()-t0:.1f} sec')
 
 #%% additional files
 #df_extra = pd.read_excel('JAN_MAR_HSIP_AWARD_MSTR_COPY.xlsx', sheet_name=None)
@@ -145,7 +146,7 @@ score['AP Control'] = df_raw['AP Control']
 keep_rows = score['total'] >= 2
 df = df_raw[keep_rows]
 if 'alexid' in filename:
-    invalid_records = invalid_records.append(df_raw[~keep_rows])
+    invalid_records = invalid_records.append(df_raw[~keep_rows], sort=False)
 else:
     invalid_records = df_raw[~keep_rows]
 
@@ -259,6 +260,7 @@ def score_calculation(df):
 #%% blocking and linking
 blocks = ['ssn','email_','address_',['last','initials'],['first','initials']]
 pair_score = []
+print(f'Start of Matching Process {time.time()-t0:.1f} sec')
 for block in blocks:
     rules = get_rules(block)
     idx_pairs = get_index_pairs(df_linkage, block)
@@ -270,7 +272,7 @@ for block in blocks:
     print('Pairs per second: {:.0f}\n'.format(len(idx_pairs)/(t2-t1)))
     pair_score.append(score_calculation(features))
 
-scores = pd.concat(pair_score, ignore_index=True, sort=False)
+scores = pd.concat(pair_score, ignore_index=True, sort=True)
 matches = scores[scores['total'] >= 2]
 matches.reset_index(drop=True, inplace=True)
 
@@ -302,8 +304,8 @@ assert master['ssn'].notnull().all()
 
 #%% manually override alexid with new alexid
 if 'alexid' in filename:
-    df_override = kathy[kathy['new_alexid'] > 1e6]
-    master.loc[df_override.index,'alexid'] = df_override['new_alexid']
+    df_override = kathy[kathy['new_rollupid'] > 1e6]
+    master.loc[df_override.index,'alexid'] = df_override['new_rollupid']
     print(f'Replaced {df_override.shape[0]} rows with new alexid')        
 
 #%%
@@ -351,26 +353,26 @@ ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
 ssn_suspects = ssn_alexid[ssn_alexid > 1]
 ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
 ssn_flag = xlsx['ssn'].isin(ssn_set)
-xlsx.loc[ssn_flag,'same_ssn_diff_alexid'] = 1
+xlsx.loc[ssn_flag,'same_ssn_diff_rollupid'] = 1
 
 name_alexid = xlsx.groupby('name_')['alexid'].nunique()
 name_suspects = name_alexid[name_alexid > 1]
 name_list = list(Rules.loc[Rules['column'] == 'name','value'])
 name_set = set(name_suspects.index) - set(name_list)
 name_flag = xlsx['name_'].isin(name_set)
-xlsx.loc[name_flag,'same_name_diff_alexid'] = 1
+xlsx.loc[name_flag,'same_name_diff_rollupid'] = 1
 
 address_alexid = xlsx.groupby('address_')['alexid'].nunique()
 address_suspects = address_alexid[address_alexid > 1]
 address_set = set(address_suspects.index) - set(address_dict.keys())
 address_flag = xlsx['address_'].isin(address_set)
-xlsx.loc[address_flag,'same_address1_diff_alexid'] = 1
+xlsx.loc[address_flag,'same_address1_diff_rollupid'] = 1
 
 email_alexid = xlsx.groupby('email_')['alexid'].nunique()
 email_suspects = email_alexid[email_alexid > 1]
 email_set = set(email_suspects.index) - set(email_dict.keys())
 email_flag = xlsx['email_'].isin(email_set)
-xlsx.loc[email_flag,'same_email_diff_alexid'] = 1
+xlsx.loc[email_flag,'same_email_diff_rollupid'] = 1
 
 xlsx.drop(['name_','address_','email_'], axis=1, inplace=True)
 
@@ -381,10 +383,15 @@ print('email', email_suspects.shape)
 
 xlsx.rename(columns={'alexid':'rollup_id'}, inplace=True)
 
-#%%
+#%% Save results
 t5 = time.time()
-xlsx.to_excel(writer, 'alexid', index=False, float_format='%.2f')
+xlsx.to_excel(writer, 'Working', index=False, float_format='%.2f')
 invalid_records.to_excel(writer, 'invalid_rows', index=False)
+# Save remainder sheets as is
+for i, (sheetname,sheet) in enumerate(sheet_dict.items()):
+    if i < 2:
+        continue
+    sheet.to_excel(writer, sheetname, index=False)
 writer.save()
 print(f'{outputfile} created in {time.time()-t5:.0f} sec')
 print(f'This whole process took too long: {time.time()-t0:.0f} sec')
