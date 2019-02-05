@@ -67,50 +67,25 @@ def standardize_email(df):
 
 #%%    
 wdir = r'X:\HSIP'
-filename = '20190125_rev_alexid.xlsx'
+filename = '20190125_rev_rollupid.xlsx'
 sheet_dict = pd.read_excel(os.path.join(wdir,filename), sheet_name=None)
 print(f'Read and standardization took {time.time()-t0:.1f} sec')
+
 sheet_names = list(sheet_dict.keys())
 df_input = sheet_dict[sheet_names[0]]
-if 'alexid' in filename:
+if 'rollupid' in filename:
     df_raw = df_input.loc[:,'hsip':'AP Control']
     kathy = df_input[['AP Control','new_rollupid','TIN MATCH','NOTES']]
     invalid_records = sheet_dict['invalid_rows']
 else:
     df_raw = df_input.copy()
-#cols = ['HSIP Control No', 'Subject#', 'Name', 'Email', 'SSN', 'Address 1',
-#       'Address 2', 'City', 'Country', 'State', 'Postal', 'Payment Type',
-#       'Date', 'Payment Amount', 'Entered', 'Last Updt', 'Form Status']
-#newcols = ['hsip', 'sid', 'name', 'email', 'ssn', 
-#              'address_1', 'address_2', 'city', 'country', 'state',
-#              'postal', 'method', 'date', 'amt', 'entered',
-#              'updated','status']
-#colnames = dict(zip(cols,newcols))
-#df_raw.rename(columns=colnames, inplace=True)
+
 df_raw = standardize_ssn(df_raw)
 df_raw = standardize_name(df_raw)
 df_raw = standardize_address(df_raw)
 df_raw = standardize_email(df_raw)
-#if 'AP Control' not in df_raw.columns:
-#    df_raw['AP Control'] = df_raw.index + 1
-#    df_raw['AP Control'] = df_raw['AP Control'].apply(lambda x: f'HSIPDEC{x:0>6}')
 
 Rules = pd.read_csv('rules.txt', sep='|')
-
-#%% additional files
-#df_extra = pd.read_excel('JAN_MAR_HSIP_AWARD_MSTR_COPY.xlsx', sheet_name=None)
-#list_df = []
-#sheets = ['HSIPJAN','HSIPMAR','AWARDJAN','AWARDMAR']
-#for df, sheet in zip(df_extra.values(), sheets):
-#    df['AP Control'] = df.index + 2
-#    df['AP Control'] = df['AP Control'].apply(lambda x: f'{sheet}{x:0>5}')
-#    list_df.append(df)
-#df_ext = pd.concat(list_df, ignore_index=True, sort=False)
-#df_ext.dropna(axis=1, how='all', inplace=True)
-#df_ext = standardize_ssn(df_ext)
-#    
-#df_rawext = pd.concat([df_raw, df_ext], ignore_index=True)
-#df_rawext = df_raw.copy()
 
 #%% Filter dataset based on rules.txt
 ssn_list = list(Rules.loc[Rules['column'] == 'ssn','value'])
@@ -145,7 +120,7 @@ score['AP Control'] = df_raw['AP Control']
 
 keep_rows = score['total'] >= 2
 df = df_raw[keep_rows]
-if 'alexid' in filename:
+if 'rollupid' in filename:
     invalid_records = invalid_records.append(df_raw[~keep_rows], sort=False)
 else:
     invalid_records = df_raw[~keep_rows]
@@ -283,38 +258,38 @@ G.add_edges_from(edgelist)
 cc = nx.connected_components(G)
 labels = {}
 labels_rev = defaultdict(list)
-for alexid, recids in enumerate(cc, start=1):
+for rollupid, recids in enumerate(cc, start=1):
     for recid in recids:
-        labels[recid] = alexid
-        labels_rev[alexid].append(recid)
+        labels[recid] = rollupid
+        labels_rev[rollupid].append(recid)
 personid = pd.DataFrame.from_dict(labels, orient='index')
-personid.columns = ['alexid']
-maxid = alexid + 1
+personid.columns = ['rollupid']
+maxid = rollupid + 1
 
 #%% assigns id to singletons and merge with groups
 dakota = df.merge(personid, how='left', left_index=True, right_index=True)
-alex = dakota[dakota['alexid'].notnull()]
-alex['alexid'] = alex['alexid'].astype(int)
-singletons = dakota[dakota['alexid'].isnull()]
+alex = dakota[dakota['rollupid'].notnull()]
+alex['rollupid'] = alex['rollupid'].astype(int)
+singletons = dakota[dakota['rollupid'].isnull()]
 singletons.dropna(axis=1, how='all', inplace=True)
-singletons['alexid'] = range(maxid, maxid+singletons.shape[0])
+singletons['rollupid'] = range(maxid, maxid+singletons.shape[0])
 master = pd.concat([alex, singletons], ignore_index=False)
 assert master['name_'].notnull().all()
 assert master['ssn'].notnull().all()
 
-#%% manually override alexid with new alexid
-if 'alexid' in filename:
+#%% manually override rollupid with new rollupid
+if 'rollupid' in filename:
     df_override = kathy[kathy['new_rollupid'] > 1e6]
-    master.loc[df_override.index,'alexid'] = df_override['new_rollupid']
-    print(f'Replaced {df_override.shape[0]} rows with new alexid')        
+    master.loc[df_override.index,'rollupid'] = df_override['new_rollupid']
+    print(f'Replaced {df_override.shape[0]} rows with new rollupid')        
 
 #%%
 def get_total_and_counts(master):
-    name_ct = master.groupby('alexid')['name_'].nunique(dropna=False)
-    email_ct = master.groupby('alexid')['email_'].nunique(dropna=False)
-    ssn_ct = master.groupby('alexid')['ssn'].nunique(dropna=False)
-    address_ct = master.groupby('alexid')['address_'].nunique(dropna=False)
-    total = master.groupby('alexid')['amt'].sum()
+    name_ct = master.groupby('rollupid')['name_'].nunique(dropna=False)
+    email_ct = master.groupby('rollupid')['email_'].nunique(dropna=False)
+    ssn_ct = master.groupby('rollupid')['ssn'].nunique(dropna=False)
+    address_ct = master.groupby('rollupid')['address_'].nunique(dropna=False)
+    total = master.groupby('rollupid')['amt'].sum()
     df = pd.DataFrame({'name_ct':name_ct,
                         'email_ct':email_ct,
                         'ssn_ct':ssn_ct,
@@ -325,12 +300,12 @@ def get_total_and_counts(master):
     return df
     
 total_cts = get_total_and_counts(master)
-master = master.merge(total_cts, how='left', left_on='alexid', right_index=True)
-master = master.sort_values(['alexid','date'], ascending=[True,False])
-master['rollup_rank'] = master.groupby('alexid').cumcount() + 1
+master = master.merge(total_cts, how='left', left_on='rollupid', right_index=True)
+master = master.sort_values(['rollupid','date'], ascending=[True,False])
+master['rollup_rank'] = master.groupby('rollupid').cumcount() + 1
 
 #%%
-master.sort_values(['total_rollup','alexid','rollup_rank'], ascending=[False,True,True], inplace=True)
+master.sort_values(['total_rollup','rollupid','rollup_rank'], ascending=[False,True,True], inplace=True)
 # formatting output
 df_date = master.select_dtypes(include='datetime')
 if 'date' in df_date.columns:
@@ -339,37 +314,37 @@ if 'entered' in df_date.columns:
     master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
 
 #%%
-if 'alexid' in filename:
-    outputfile = filename.replace('alexid','alexidv2')
+if 'rollupid' in filename:
+    outputfile = filename.replace('rollupid','rollupidv2')
 else:
-    outputfile = filename.replace('.xlsx','_alexid.xlsx')
+    outputfile = filename.replace('.xlsx','_rollupid.xlsx')
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx = master.drop(['first','last','initials'], axis=1)
-if 'alexid' in filename:
+if 'rollupid' in filename:
     xlsx = xlsx.merge(kathy, how='left', on='AP Control')
 
 #%% Identify possible false negatives
-ssn_alexid = xlsx.groupby('ssn')['alexid'].nunique()
-ssn_suspects = ssn_alexid[ssn_alexid > 1]
+ssn_rollupid = xlsx.groupby('ssn')['rollupid'].nunique()
+ssn_suspects = ssn_rollupid[ssn_rollupid > 1]
 ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
 ssn_flag = xlsx['ssn'].isin(ssn_set)
 xlsx.loc[ssn_flag,'same_ssn_diff_rollupid'] = 1
 
-name_alexid = xlsx.groupby('name_')['alexid'].nunique()
-name_suspects = name_alexid[name_alexid > 1]
+name_rollupid = xlsx.groupby('name_')['rollupid'].nunique()
+name_suspects = name_rollupid[name_rollupid > 1]
 name_list = list(Rules.loc[Rules['column'] == 'name','value'])
 name_set = set(name_suspects.index) - set(name_list)
 name_flag = xlsx['name_'].isin(name_set)
 xlsx.loc[name_flag,'same_name_diff_rollupid'] = 1
 
-address_alexid = xlsx.groupby('address_')['alexid'].nunique()
-address_suspects = address_alexid[address_alexid > 1]
+address_rollupid = xlsx.groupby('address_')['rollupid'].nunique()
+address_suspects = address_rollupid[address_rollupid > 1]
 address_set = set(address_suspects.index) - set(address_dict.keys())
 address_flag = xlsx['address_'].isin(address_set)
 xlsx.loc[address_flag,'same_address1_diff_rollupid'] = 1
 
-email_alexid = xlsx.groupby('email_')['alexid'].nunique()
-email_suspects = email_alexid[email_alexid > 1]
+email_rollupid = xlsx.groupby('email_')['rollupid'].nunique()
+email_suspects = email_rollupid[email_rollupid > 1]
 email_set = set(email_suspects.index) - set(email_dict.keys())
 email_flag = xlsx['email_'].isin(email_set)
 xlsx.loc[email_flag,'same_email_diff_rollupid'] = 1
@@ -380,8 +355,6 @@ print('ssn', ssn_suspects.shape)
 print('name', name_suspects.shape)
 print('address', address_suspects.shape)
 print('email', email_suspects.shape)
-
-xlsx.rename(columns={'alexid':'rollup_id'}, inplace=True)
 
 #%% Save results
 t5 = time.time()
