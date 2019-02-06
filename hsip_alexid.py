@@ -25,8 +25,8 @@ t0 = time.time()
 def standardize_ssn(df):
     df['ssn'].fillna('000000000', inplace=True)
     df['ssn'] = df['ssn'].astype(str).str.replace('-','')
-    df['ssn'] = df['ssn'].str.replace('111111111','000000000')
-    df['ssn'] = df['ssn'].str.replace('.0','')
+    df['ssn'] = df['ssn'].str.replace('1{9}','000000000')
+    df['ssn'] = df['ssn'].str.replace('.0','',regex=False)
     df['ssn'] = df['ssn'].str.zfill(9)
     return df
 
@@ -48,14 +48,19 @@ def standardize_name(df):
 def standardize_address(df):
     tf = (df_input['address_1'].isnull()) & (df_input['address_2'].notnull())
     df.loc[tf,['address_1','address_2']] = df.loc[tf,['address_2','address_1']].values    
-    df['address_1'].fillna('', inplace=True) # check for blank addresses
+    columns = ['address_1','address_2','city','state']
+    for column in columns:
+        df[column].fillna('', inplace=True) # fill in blank entries temporarily
     tf = df['address_1'].str.contains('@')
     df.loc[tf,'email'] = df.loc[tf,'address_1'] # assign email to correct column
     df.loc[tf,'address_1'] = ''
-    address_invalid_punctuation = re.sub(r'[-&#/@]','',string.punctuation)
+    address_invalid_punctuation = re.sub(r'[-#/]','',string.punctuation)
     regex_punct = re.compile(rf'[{address_invalid_punctuation}]')
-    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex_punct, '', x).strip().upper() )
-    df['address_1'].replace({'': None}, inplace=True)
+    df['address_1'] = df['address_1'].apply(lambda x: re.sub(regex_punct, '', x).strip() )
+    df['address_2'] = df['address_2'].apply(lambda x: re.sub(regex_punct, '', x).strip() )
+    df['city'] = df['city'].apply(lambda x: re.sub(regex_punct, '', x).strip() )
+    for column in columns:
+        df[column] = df[column].str.upper().replace({'': None})
     return df
 
 def standardize_email(df):
@@ -68,15 +73,15 @@ def standardize_email(df):
 #%%    
 wdir = r'X:\HSIP'
 filename = '20190125_rev_rollupid.xlsx'
-sheet_dict = pd.read_excel(os.path.join(wdir,filename), sheet_name=None)
+sheet_dict = pd.read_excel(os.path.join(wdir,filename), sheet_name=[0,1])
 print(f'Read and standardization took {time.time()-t0:.1f} sec')
 
 sheet_names = list(sheet_dict.keys())
-df_input = sheet_dict[sheet_names[0]]
+df_input = sheet_dict[0]
 if 'rollupid' in filename:
     df_raw = df_input.loc[:,'hsip':'AP Control']
     kathy = df_input[['AP Control','new_rollupid','TIN MATCH','NOTES']]
-    invalid_records = sheet_dict['invalid_rows']
+    invalid_records = sheet_dict[1]
 else:
     df_raw = df_input.copy()
 
@@ -360,11 +365,6 @@ print('email', email_suspects.shape)
 t5 = time.time()
 xlsx.to_excel(writer, 'Working', index=False, float_format='%.2f')
 invalid_records.to_excel(writer, 'invalid_rows', index=False)
-# Save remainder sheets as is
-for i, (sheetname,sheet) in enumerate(sheet_dict.items()):
-    if i < 2:
-        continue
-    sheet.to_excel(writer, sheetname, index=False)
 writer.save()
 print(f'{outputfile} created in {time.time()-t5:.0f} sec')
 print(f'This whole process took too long: {time.time()-t0:.0f} sec')
