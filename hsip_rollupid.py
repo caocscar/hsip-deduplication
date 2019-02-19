@@ -96,6 +96,9 @@ Rules = pd.read_csv('rules.txt', sep='|')
 ssn_list = list(Rules.loc[Rules['column'] == 'ssn','value'])
 ssn_dict = {ssn:None for ssn in ssn_list}
 
+name_list = list(Rules.loc[Rules['column'] == 'name','value'])
+name_dict = {name:None for name in name_list}
+
 address_list = list(Rules.loc[Rules['column'] == 'address_1','value'])
 address_dict = {addr.replace(' ','').lower():None for addr in address_list}
 
@@ -324,11 +327,15 @@ if 'rollupid' in filename:
 else:
     outputfile = filename.replace('.xlsx','_rollupid.xlsx')
 writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
+#%%
 xlsx = master.drop(['first','last','initials'], axis=1)
 if 'rollupid' in filename:
     xlsx = xlsx.merge(kathy, how='left', on='AP Control')
 
 #%% Identify possible false negatives
+key_columns = ['name_','email_','address_','ssn','rollupid']
+xlsx['valid_ssn'] = xlsx['ssn'].map(lambda x: x != '000000000')
+
 ssn_rollupid = xlsx.groupby('ssn')['rollupid'].nunique()
 ssn_suspects = ssn_rollupid[ssn_rollupid > 1]
 ssn_set = set(ssn_suspects.index) - set(ssn_dict.keys())
@@ -336,25 +343,33 @@ ssn_flag = xlsx['ssn'].isin(ssn_set)
 xlsx.loc[ssn_flag,'same_ssn_diff_rollupid'] = 1
 
 name_rollupid = xlsx.groupby('name_')['rollupid'].nunique()
-name_suspects = name_rollupid[name_rollupid > 1]
-name_list = list(Rules.loc[Rules['column'] == 'name','value'])
-name_set = set(name_suspects.index) - set(name_list)
+name_ssn = xlsx.groupby('name_')['valid_ssn'].any()
+name_suspects = name_ssn[(name_rollupid > 1) & (name_ssn)]
+name_set = set(name_suspects.index) - set(name_dict.keys())
 name_flag = xlsx['name_'].isin(name_set)
-xlsx.loc[name_flag,'same_name_diff_rollupid'] = 1
+dupes = xlsx.loc[name_flag].duplicated(key_columns, keep='first')
+tf = dupes[~dupes]
+xlsx.loc[tf.index,'same_name_diff_rollupid'] = 1
 
 address_rollupid = xlsx.groupby('address_')['rollupid'].nunique()
-address_suspects = address_rollupid[address_rollupid > 1]
+address_ssn = xlsx.groupby('address_')['valid_ssn'].any()
+address_suspects = address_ssn[(address_rollupid > 1) & (address_ssn)]
 address_set = set(address_suspects.index) - set(address_dict.keys())
 address_flag = xlsx['address_'].isin(address_set)
-xlsx.loc[address_flag,'same_address1_diff_rollupid'] = 1
+dupes = xlsx.loc[address_flag].duplicated(key_columns, keep='first')
+tf = dupes[~dupes]
+xlsx.loc[tf.index,'same_address1_diff_rollupid'] = 1
 
 email_rollupid = xlsx.groupby('email_')['rollupid'].nunique()
-email_suspects = email_rollupid[email_rollupid > 1]
+email_ssn = xlsx.groupby('email_')['valid_ssn'].any()
+email_suspects = email_rollupid[(email_rollupid > 1) & (email_ssn)]
 email_set = set(email_suspects.index) - set(email_dict.keys())
 email_flag = xlsx['email_'].isin(email_set)
-xlsx.loc[email_flag,'same_email_diff_rollupid'] = 1
+dupes = xlsx.loc[email_flag].duplicated(key_columns, keep='first')
+tf = dupes[~dupes]
+xlsx.loc[tf.index,'same_email_diff_rollupid'] = 1
 
-xlsx.drop(['name_','address_','email_'], axis=1, inplace=True)
+xlsx.drop(['name_','address_','email_','valid_ssn'], axis=1, inplace=True)
 
 print('ssn', ssn_suspects.shape) 
 print('name', name_suspects.shape)
