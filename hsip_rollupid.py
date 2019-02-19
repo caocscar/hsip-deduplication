@@ -371,10 +371,10 @@ xlsx.loc[tf.index,'same_email_diff_rollupid'] = 1
 
 xlsx.drop(['name_','address_','email_','valid_ssn'], axis=1, inplace=True)
 
-print('ssn', ssn_suspects.shape) 
-print('name', name_suspects.shape)
-print('address', address_suspects.shape)
-print('email', email_suspects.shape)
+print('ssn', len(ssn_set)) 
+print('name', len(name_set))
+print('address', len(address_set))
+print('email', len(email_set))
 
 #%% Save results
 t5 = time.time()
