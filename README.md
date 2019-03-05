@@ -1,90 +1,152 @@
 # HSIP Person Identification
 CSCAR's script for HSIP person identification.
 
+## Installation
+1. Download the Anaconda Python package installer https://repo.continuum.io/archive/Anaconda3-5.2.0-Windows-x86_64.exe. This downloads Anaconda Python 3.6 for Windows (631.3MB) from the repo archive.
+2. Install the package by clicking on the executable `Anaconda3-5.2.0-Windows-x86_64.exe`.
+3. Choose to install it just for the current user.
+4. After installation is done, we need to still install some additional packages. Open `Anaconda Prompt` from the Start Menu.
+5. Run the following commands. They will install the required dependencies that are not part of the default Anaconda installation.  
+`pip install recordlinkage`  
+`pip install nameparser`
+
 ## Usage
 To run the program, do the following:
 1. Open `Anaconda Prompt` from the Start Menu
-2. Change directory to the folder where the python script `hsip_alexid.py` and **Excel** file resides.  
+2. Change directory to the folder where the python script `hsip_rollupid.py` and **Excel** file resides.  
 For example, `cd C:\Users\caoa\Desktop\HSIP`
 3. Run the program with some input arguments.  
-For example, `python hsip_assignid.py --filename "my file.xlsx"`
-4. The program will create an output file by append `_alexid` to the end of the filename.  
-The output file will have two extra columns: **alexid** and **total** for that individual.
+For example, `python hsip_rollupid.py --filename "my file.xlsx"`
+4. The program will create an output file by append `_rollupid` to the end of the filename.  
 
 ## Example
 Here is a sample command line which uses all the available keyword arguments.  
-`python hsip_alexid.py --filename "my file.xlsx"`
+`python hsip_rollupid.py --filename "my file.xlsx"`
 
 Argument|Shorthand|Usage
 ---|:---:|---
---filename|-f|`python hsip_alexid.py -f input_file.xlsx`
+--filename|-f|`python hsip_rollupid.py -f input_file.xlsx`
 
 **Tip:** You have to specify a `--filename` argument or it will complain.
 
 ## Runtime
-The PC can process about 10,000 pairs a second for matches. For a million pairs, that's about 2 minutes. The program will print out how many pairs it is computing.
+The program will print out occasional messages indicating progress. Running time will vary on PC hardware. It should take less than 10 minutes for a file with approximately 200,000 rows. On my Intel i5-4590 3.30GHz with 8GB RAM, it took about 7 minutes. If it takes more than 15 minutes, there is probably something wrong and should be diagnosed.
+
+## Input File Requirements
+1. Any password protection should be removed from the file prior to running the program otherwise it will result in an error.
+2. The file should have at most two sheets. The first sheet should have the input data 
+The following table specifies the possible columns along with whether it is required and if the name is case sensitive:
+
+---|hsip|sid|hsip_sid|HUM #|name|email|ssn|address_1|address_2|city|county|state|postal|method|date|amt|entered|updated|status|origname|origemail|origssn|origaddress|AP Control|new_rollupid|TIN MATCH|NOTES
+---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---
+required|no|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|no|no
+name case-sensitive|no|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|no|no|no|no|yes|yes|no|no
+
+## Output File
+The program will add/modify the following columns in the output file.
+
+column|
+---|
+rollup_id|
+total_rollup|
+name_ct|
+email_ct|
+ssn_ct|
+address_ct|
+ct_sum|
+rollup_rank|
+same_ssn_diff_rollupid|
+same_name_diff_rollupid|
+same_address1_diff_rollupid|
+same_email_diff_rollupid|
 
 ## Algorithm
 These are the high-level steps in the algorithm.
-1. Reads in dataset from all Excel files.
-2. Removed invalid punctuation set from **name** and **address** field.
-3. Moved email addresses from **name** and **address** field to **email** column.
-2. Add primary key column **uid** for each dataset.
-3. Read in [rules.txt](rules.txt) that contains a list of invalid entries.
-3. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**.
-4. Swap **address_1** and **address_2** if there is a `C/O` in **address_1**.
-5. Add **address_1** and **address_2** if there is only a number in **address_1**.
-6. Standardize common address suffixes (e.g. Street to St) and direction (e.g. West to W).
-7. Convert address to lowercase and remove spaces for matching.
-8. Convert name to lowercase for matching.
-9. **Name** column is split into 3 parts (regardless of actual names present): first, middle, last.
-10. Created **initials** column from **first** and **last** name.
-11. Define function with rules for matching (see [Matching section](#matching) below).
-12. Performs four rounds of matching using these blocking elements (Rd1: **ssn**, Rd2: **address**, Rd3:**last** & **initials**, Rd4: **first**, **initials**).
-13. Assigns an `alexid` to each individual using the network's connected components.
-14. Tabulate total amount for each indivudal.
-16. Get distinct count of name, ssn, address for each `alexid`. A blank counts as a distinct value.
-17. Enumerate records within each `alexid`.
-16. Write original dataset with new columns `[uid, alexid, total, name_ct, ssn_ct, address_ct, ct_sum, record]` to xlsx.
-17. Write additional sheets for debugging purposes: `invalid_rows`, `same_ssn_diff_alexid`, `same_name_diff_alexid`, `same_address1_diff_alexid`.
+1. Reads in dataset from a single Excel file.
+2. Standardize SSN
+    - fill blanks with 000000000
+    - remove any hyphens
+    - replace 111111111 with 000000000
+    - add necessary leading zeros to make a 9 digit string
+3. Standardize Name
+    - move any email addresses to email column
+    - keep only valid punctuation `-&` and remove the rest
+    - remove the following titles *(MD,PHD,FCCP,DDS,MBA,MHS**
+    - convert to UPPERCASE
+4. Standardize Address (address_1 and address_2)
+    - swap **address_1** and **address_2** if **address_1** is blank and **address_2** is not
+    - swap **address_1** and **address_2** if there is a a `C/O` in **address_1**
+    - combine **address_1** and **address_2** if there is only a number in **address_1**
+    - move any email addresses to email column
+    - keep only valid punctuation `-#/` and remove the rest
+    - convert to UPPERCASE
+5. Standardize Email
+    - convert to lowercase
+    - remove punctuation `._`
+6. Read in [rules.txt](rules.txt) that contains a list of invalid entries.
+7. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**, **email**.
+8. Add invalid rows to the `invalid_rows` sheet.
 
-The source code can be found [here](hsip_alexid.py). There are other minor details in the code that I didn't mention. 
+9. Standardize common address words (e.g. Street to St) and direction (e.g. West to W).
+10. Remove address spaces and commas for faster matching.
 
-## Valid and Invalid Street Addresses
-Three parts of the street address: *address_1, city, postal* are considered for the street address filtering.
-An address is considered valid if the **address score** is ≥ 1 otherwise it is invalid. The weights were chosen such that a valid score meant that the mailing address could be derived from the relevant entries. The following table show the relative weights.
+11. Grab local part (characters before the @) of email address.
 
-Part|Score
----|:---:
-address|0.6
-city|0.4
-postal|0.4
+12. Replace hyphens with spaces for name for better matches.
+13. Parse name into `first` and `last` using the nameparser package.
+14. Created **initials** column from **first** and **last** name.
 
-The following table shows the exhaustive examples from these three columns.
+15. Define rules for matching (see [Matching section](#matching) below).
 
-Valid Parts|Example|Address Score|Street Address
----|---|:---:|:---:
-address + city + postal|1107 White St, Ann Arbor, 48103|1.4|Valid
-address + city|1107 White St, Ann Arbor|1.0|Valid
-address + postal|1107 White St, 48104|1.0|Valid
-city + postal|Ann Arbor, 48104|0.8|Invalid
-address|1107 White St|0.6|Invalid
-city|Ann Arbor|0.4|Invalid
-postal|48104|0.4|Invalid
+16. Performs five rounds of matching using these blocking elements:
+    - **ssn**
+    - **email**
+    - **address**
+    - **last** & **initials**
+    - **first** & **initials**
+
+17. Tabulate total score for each row that was compared
+18. Assigns a match to those pair with a score ≥ 2
+19. Creates a network graph and assigns a **rollupid** to each individual using the network's connected components.
+20. Override any **rollupid** with a manually assigned **new_rollupid**
+
+21. Calculate the total amount for each **rollupid**
+22. Get distinct count of name, email, ssn, address for each **rollupid**. A blank counts as a distinct value. 
+23. Enumerate records within each **rollupid** based on **date** column in reverse chronological order.
+
+24. Format datetime columns **date** and **entered**  to only `Month-Day-Year`
+
+25. Create new columns to identify possible false negatives for further manual inspection  
+`same_ssn_diff_rollupid`  
+`same_email_diff_rollupid`
+`same_name_diff_rollupid`  
+`same_address1_diff_rollupid`  
+The algorithm will flag rows that have the same {ssn, name, address, email} but   different rollupid (a grouping). Certain rows will not be flagged if they meet the one of the following conditions:
+    - A row that is a duplicate of another based on these 4 columns. This is based on the input columns to the matching process. For example, *1128 South White Avenue* and *1128 S White Ave* will be considered identical.
+    - If all the values in the grouping are `000000000`
+    - If the value is an invalid entry as listed in `rules.txt`
+    - For address, any value that is considered common (found in more than 100 rows). This is indicative of a university/business location. For example, *1500 E Medical Ctr Dr* is UM Hospital and *1285 Franz Hall Box 951563* is the UCLA Pyschology Dept.
+
+26. Write original dataset with new columns.
+27. Write additional sheet containing **invalid_rows**.
+
+The source code can be found [here](hsip_rollupid.py). There are other minor details in the code that I didn't mention. 
 
 ## Matching
-Each of the following column has a score to indicate a match or not. A score ≥ 1 indicates a match for that column. Two rows are a match if they have a score ≥ 2.
+Each of the following column has a score to indicate a match or not. A non-zero score indicates a match for that column. Two rows are a match if they have a score ≥ 2.
 
-Column|Max Score Possible
+Column|Score
 ---|:---:
-Name|1.0
-Street Address|1.4
-SSN|1.0
+first|0.5
+last|0.5
+email|1.5
+ssn|1.0
+address|1.0
 
-**Note:** The **Name** score is considered an average of the *first name* and *last name* score (middle name is not considered).
+**Note:** If there is only one name, the algorithm considers it a **first** name.
 
-## Matching Algorithm
-We compare two strings using the [Jaro-Winkler distance](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance). A threshold of 0.82 is considered for a match (i.e. score = 1)
+## String Matching
+We compare two strings using the [Jaro-Winkler distance](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance). A threshold of 0.82 is considered for a match.
 
 The table below shows some example of some string comparisons.
 
@@ -98,3 +160,38 @@ alex|alan|0.67
 alex|lily|0.50
 alex|zhou|0.00
 
+## SSN Matching
+We compare two SSN strings using the [Demarau-Levenshtein distance](https://en.wikipedia.org/wiki/Damerau%E2%80%93Levenshtein_distance). A threshold of 0.77 is considered for a match.
+
+## Progress Report
+The print out should look something like this if it runs without error.
+> Read and standardization took 48.0 seconds  
+Start of Matching Process 64.6 seconds  
+ssn pairs = 67,633  
+Matching took 3.6 seconds
+Pairs per second: 18945  
+
+> email_ pairs = 46,481  
+Matching took 1.7 seconds  
+Pairs per second: 27040  
+
+> address_ pairs = 2,965,992  
+Matching took 84.3 seconds  
+Pairs per second: 35197  
+
+> ['last', 'initials'] pairs = 926,925  
+Matching took 35.3 seconds  
+Pairs per second: 26228  
+
+> ['first', 'initials'] pairs = 2,023,933  
+Matching took 72.1 seconds  
+Pairs per second: 28054  
+
+> Replaced 0 rows with new rollupid  
+ssn 3  
+name 902  
+address 2040  
+email 0  
+20190125_rev_rollupidv2.xlsx created in 117 seconds  
+This whole process took too long: 391 seconds  
+```
