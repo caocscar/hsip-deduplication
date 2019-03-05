@@ -31,23 +31,35 @@ def standardize_ssn(df):
     return df
 
 def standardize_name(df):
-    tf = (df_input['address_1'].isnull()) & (df_input['address_2'].notnull())
-    df.loc[tf,['address_1','address_2']] = df.loc[tf,['address_2','address_1']].values
     df['name'].fillna('', inplace=True) # check for blank names
     tf = df['name'].str.contains('@')
     df.loc[tf,'email'] = df.loc[tf,'name'] # assign email to correct column
     df.loc[tf,'name'] = ''
     name_invalid_punctuation = re.sub(r'[-&]','',string.punctuation)
     regex_punct = re.compile(rf'[{name_invalid_punctuation}]')
-    regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MHS|)\b')
+    regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MHS)\b')
     tmp = df['name'].apply(lambda x: re.sub(regex_punct, '', x))
     df['name'] = tmp.apply(lambda x: re.sub(regex_titles, '', x).strip(' ').upper() )
     df['name'].replace({'': None}, inplace=True)
     return df
 
+def look4careof(address):
+    if address:
+        if 'C/O' in address:
+            return True
+    return False
+
 def standardize_address(df):
     tf = (df_input['address_1'].isnull()) & (df_input['address_2'].notnull())
     df.loc[tf,['address_1','address_2']] = df.loc[tf,['address_2','address_1']].values    
+    # swap c/o address_1 with address_2      
+    careof = df['address_1'].astype(str).apply(look4careof)
+    df.loc[careof,['address_1','address_2']] = df.loc[careof,['address_2','address_1']].values
+    # add address_1 and address_2 for numbers only address_1
+    numbersonly = df['address_1'].str.isnumeric()
+    notblank = df['address_2'].notnull()
+    tf = numbersonly & notblank
+    df.loc[tf,'address_1'] = df.loc[tf,'address_1'].astype(str) + ' ' + df.loc[tf,'address_2'].astype(str)
     columns = ['address_1','address_2','city','state']
     for column in columns:
         df[column].fillna('', inplace=True) # fill in blank entries temporarily
@@ -135,21 +147,6 @@ else:
 
 #%% data wrangling for matching purposes
 # Address Section
-# swap c/o address_1 with address_2
-def look4careof(address):
-    if address:
-        if 'C/O' in address:
-            return True
-    return False
-    
-careof = df['address_1'].astype(str).apply(look4careof)
-df.loc[careof,['address_1','address_2']] = df.loc[careof,['address_2','address_1']].values
-# add address_1 and address_2 for numbers only address_1
-numbersonly = df['address_1'].str.isnumeric()
-notblank = df['address_2'].notnull()
-tf = numbersonly & notblank
-df.loc[tf,'address_1'] = df.loc[tf,'address_1'].astype(str) + ' ' + df.loc[tf,'address_2'].astype(str)
-
 # standardize suffixes to increase # of matched pairs
 suffix = [('SOUTH','S'),('NORTH','N'),('EAST','E'),('WEST','W'),
 ('NORTHWEST','NW'),('SOUTHWEST','SW'),('NORTHEAST','NE'),('SOUTHEAST','SE'),
@@ -169,8 +166,7 @@ regex_email = re.compile('^([^@]+)@?', flags=re.IGNORECASE)
 
 def get_local_part(x):
     match = re.search(regex_email, x)
-    local_part = match.group(1).lower()
-    return re.sub(r'[._]', '', local_part)
+    return match.group(1)
 
 tf = df['email'].notnull()
 df.loc[tf,'email_'] = df.loc[tf,'email'].apply(get_local_part)
@@ -195,7 +191,7 @@ df_linkage.replace({'ssn':ssn_dict,
                     'email_':email_dict,
                     }, inplace=True)
 
-#%%
+    #%%
 def get_rules(columns):
     if isinstance(columns, str):
         columns = [columns]
@@ -322,19 +318,16 @@ if 'entered' in df_date.columns:
     master['entered'] = master['entered'].dt.strftime('%m-%d-%Y')
 
 #%%
-if 'rollupid' in filename:
-    outputfile = filename.replace('rollupid','rollupidv2')
-else:
-    outputfile = filename.replace('.xlsx','_rollupid.xlsx')
-writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
-#%%
 xlsx = master.drop(['first','last','initials'], axis=1)
 if 'rollupid' in filename:
     xlsx = xlsx.merge(kathy, how='left', on='AP Control')
 
 #%% Identify possible false negatives
 key_columns = ['name_','email_','address_','ssn','rollupid']
-xlsx['valid_ssn'] = xlsx['ssn'].map(lambda x: x != '000000000')
+xlsx['valid_ssn'] = xlsx['ssn'] != '000000000'
+common_addresses = df_linkage['address_'].value_counts()
+special_addresses = common_addresses[common_addresses > 100].index
+xlsx['less_common_address'] = ~xlsx['address_'].isin(special_addresses)
 
 ssn_rollupid = xlsx.groupby('ssn')['rollupid'].nunique()
 ssn_suspects = ssn_rollupid[ssn_rollupid > 1]
@@ -353,7 +346,8 @@ xlsx.loc[tf.index,'same_name_diff_rollupid'] = 1
 
 address_rollupid = xlsx.groupby('address_')['rollupid'].nunique()
 address_ssn = xlsx.groupby('address_')['valid_ssn'].any()
-address_suspects = address_ssn[(address_rollupid > 1) & (address_ssn)]
+address_lesscommon = xlsx.groupby('address_')['less_common_address'].any()
+address_suspects = address_ssn[(address_rollupid > 1) & (address_ssn) & (address_lesscommon)]
 address_set = set(address_suspects.index) - set(address_dict.keys())
 address_flag = xlsx['address_'].isin(address_set)
 dupes = xlsx.loc[address_flag].duplicated(key_columns, keep='first')
@@ -378,6 +372,11 @@ print('email', len(email_set))
 
 #%% Save results
 t5 = time.time()
+if 'rollupid' in filename:
+    outputfile = filename.replace('rollupid','rollupidv2')
+else:
+    outputfile = filename.replace('.xlsx','_rollupid.xlsx')
+writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx.to_excel(writer, 'Working', index=False, float_format='%.2f')
 invalid_records.to_excel(writer, 'invalid_rows', index=False)
 writer.save()
