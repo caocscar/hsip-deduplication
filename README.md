@@ -9,9 +9,12 @@ CSCAR's script for HSIP person identification.
 5. Run the following commands. They will install the required dependencies that are not part of the default Anaconda installation.  
 `pip install recordlinkage`  
 `pip install nameparser`
+6. Download zip of [github repository](https://github.com/caocscar/hsip-deduplication)
+or git clone `git clone https://github.com/caocscar/hsip-deduplication.git`
+7. Unzip file to working directory (if necessary).
+8. Put input file in the same directory as `hsip_rollupid.py`.
 
 ## Usage
-To run the program, do the following:
 1. Open `Anaconda Prompt` from the Start Menu
 2. Change directory to the folder where the python script `hsip_rollupid.py` and **Excel** file resides.  
 For example, `cd C:\Users\caoa\Desktop\HSIP`
@@ -28,9 +31,6 @@ Argument|Shorthand|Usage
 --filename|-f|`python hsip_rollupid.py -f input_file.xlsx`
 
 **Tip:** You have to specify a `--filename` argument or it will complain.
-
-## Runtime
-The program will print out occasional messages indicating progress. Running time will vary on PC hardware. It should take less than 10 minutes for a file with approximately 200,000 rows. On my Intel i5-4590 3.30GHz with 8GB RAM, it took about 7 minutes. If it takes more than 15 minutes, there is probably something wrong and should be diagnosed.
 
 ## Input File Requirements
 1. Any password protection should be removed from the file prior to running the program otherwise it will result in an error.
@@ -162,6 +162,11 @@ alex|zhou|0.00
 
 ## SSN Matching
 We compare two SSN strings using the [Demarau-Levenshtein distance](https://en.wikipedia.org/wiki/Damerau%E2%80%93Levenshtein_distance). A threshold of 0.77 is considered for a match.
+
+## Runtime
+The program will print out occasional messages indicating progress. Running time will vary on PC hardware. It should take less than 10 minutes for a file with approximately 200,000 rows. On my Intel i5-4590 3.30GHz with 8GB RAM, it took about 7 minutes. 
+
+If it takes more than 15 minutes, there is probably something wrong and should be diagnosed.
 
 ## Progress Report
 The print out should look something like this if it runs without error.
