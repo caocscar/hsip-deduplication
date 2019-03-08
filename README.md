@@ -39,15 +39,15 @@ The following table specifies the possible columns along with whether it is requ
 
 ---|hsip|sid|hsip_sid|HUM #|name|email|ssn|address_1|address_2|city|county|state|postal|method|date|amt|entered|updated|status|origname|origemail|origssn|origaddress|AP Control|new_rollupid|TIN MATCH|NOTES
 ---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---
-required|no|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|no|no
-name case-sensitive|no|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|no|no|no|no|yes|yes|no|no
+required|yes|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes
+name case-sensitive|yes|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|no|no|no|no|yes|yes|yes|yes
 
 ## Output File
 The program will add/modify the following columns in the output file.
 
 column|
 ---|
-rollup_id|
+rollupid|
 total_rollup|
 name_ct|
 email_ct|

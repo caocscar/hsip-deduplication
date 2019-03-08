@@ -84,9 +84,9 @@ def standardize_email(df):
 
 #%%    
 wdir = r'X:\HSIP'
-filename = '20190125_rev_rollupid.xlsx'
+filename = '20190307_Working_March_rollupid.xlsx'
 sheet_dict = pd.read_excel(os.path.join(wdir,filename), sheet_name=[0,1])
-print(f'Read and standardization took {time.time()-t0:.1f} sec')
+print(f'Reading Excel file took {time.time()-t0:.1f} seconds')
 
 sheet_names = list(sheet_dict.keys())
 df_input = sheet_dict[0]
@@ -239,7 +239,7 @@ def score_calculation(df):
 #%% blocking and linking
 blocks = ['ssn','email_','address_',['last','initials'],['first','initials']]
 pair_score = []
-print(f'Start of Matching Process {time.time()-t0:.1f} sec')
+print(f'Start of Matching Process. {time.time()-t0:.1f} seconds has elapsed')
 for block in blocks:
     rules = get_rules(block)
     idx_pairs = get_index_pairs(df_linkage, block)
@@ -247,7 +247,7 @@ for block in blocks:
     t1 = time.time()
     features = rules.compute(idx_pairs, df_linkage)
     t2 = time.time()
-    print(f'Matching took {t2-t1:.1f} sec' )
+    print(f'Matching took {t2-t1:.1f} seconds' )
     print('Pairs per second: {:.0f}\n'.format(len(idx_pairs)/(t2-t1)))
     pair_score.append(score_calculation(features))
 
@@ -380,5 +380,5 @@ writer = pd.ExcelWriter(os.path.join(wdir,outputfile))
 xlsx.to_excel(writer, 'Working', index=False, float_format='%.2f')
 invalid_records.to_excel(writer, 'invalid_rows', index=False)
 writer.save()
-print(f'{outputfile} created in {time.time()-t5:.0f} sec')
-print(f'This whole process took too long: {time.time()-t0:.0f} sec')
+print(f'{outputfile} created in {time.time()-t5:.0f} seconds')
+print(f'This whole process took too long: {time.time()-t0:.0f} seconds')
