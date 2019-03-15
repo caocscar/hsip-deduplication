@@ -125,7 +125,7 @@ The algorithm will flag rows that have the same {ssn, name, address, email} but 
     - A row that is a duplicate of another based on these 4 columns. This is based on the input columns to the matching process. For example, *1128 South White Avenue* and *1128 S White Ave* will be considered identical.
     - If all the values in the grouping are `000000000`
     - If the value is an invalid entry as listed in `rules.txt`
-    - For address, any value that is considered common (found in more than 100 rows). This is indicative of a university/business location. For example, *1500 E Medical Ctr Dr* is UM Hospital and *1285 Franz Hall Box 951563* is the UCLA Pyschology Dept.
+    - For address, any value that is considered common (found in more than 5 rows). This is to reduce the number of records flagged to look at. Addresses that are common are usually a university/business location. For example, *1500 E Medical Ctr Dr* is UM Hospital and *1285 Franz Hall Box 951563* is the UCLA Pyschology Dept.
 
 26. Write original dataset with new columns.
 27. Write additional sheet containing **invalid_rows**.
@@ -168,7 +168,7 @@ The program will print out occasional messages indicating progress. Running time
 
 If it takes more than 15 minutes, there is probably something wrong and should be diagnosed.
 
-## Progress Report
+## Progress Print Out
 The print out should look something like this if it runs without error.
 > Read and standardization took 48.0 seconds  
 Start of Matching Process 64.6 seconds  
