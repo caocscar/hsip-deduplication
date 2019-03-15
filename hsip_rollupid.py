@@ -101,6 +101,8 @@ df_raw = standardize_ssn(df_raw)
 df_raw = standardize_name(df_raw)
 df_raw = standardize_address(df_raw)
 df_raw = standardize_email(df_raw)
+df_raw['date'] = pd.to_datetime(df_raw['date'])
+df_raw['entered'] = pd.to_datetime(df_raw['entered'])
 
 Rules = pd.read_csv('rules.txt', sep='|')
 
@@ -326,8 +328,8 @@ if 'rollupid' in filename:
 key_columns = ['name_','email_','address_','ssn','rollupid']
 xlsx['valid_ssn'] = xlsx['ssn'] != '000000000'
 common_addresses = df_linkage['address_'].value_counts()
-special_addresses = common_addresses[common_addresses > 100].index
-xlsx['less_common_address'] = ~xlsx['address_'].isin(special_addresses)
+special_addresses = common_addresses[common_addresses <= 5].index
+xlsx['less_common_address'] = xlsx['address_'].isin(special_addresses)
 
 ssn_rollupid = xlsx.groupby('ssn')['rollupid'].nunique()
 ssn_suspects = ssn_rollupid[ssn_rollupid > 1]
