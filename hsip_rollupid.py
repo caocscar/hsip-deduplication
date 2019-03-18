@@ -84,7 +84,7 @@ def standardize_email(df):
 
 #%%    
 wdir = r'X:\HSIP'
-filename = '20190307_Working_March_rollupid.xlsx'
+filename = '20190314_Working_March_rollupid.xlsx'
 sheet_dict = pd.read_excel(os.path.join(wdir,filename), sheet_name=[0,1])
 print(f'Reading Excel file took {time.time()-t0:.1f} seconds')
 
@@ -285,7 +285,7 @@ assert master['ssn'].notnull().all()
 
 #%% manually override rollupid with new rollupid
 if 'rollupid' in filename:
-    df_override = kathy[kathy['new_rollupid'] > 1e6]
+    df_override = kathy[(kathy['new_rollupid'] > 1e6) & keep_rows]
     master.loc[df_override.index,'rollupid'] = df_override['new_rollupid']
     print(f'Replaced {df_override.shape[0]} rows with new rollupid')        
 
