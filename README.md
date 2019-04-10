@@ -170,33 +170,49 @@ If it takes more than 15 minutes, there is probably something wrong and should b
 
 ## Progress Print Out
 The print out should look something like this if it runs without error.
-> Read and standardization took 48.0 seconds  
-Start of Matching Process 64.6 seconds  
-ssn pairs = 67,633  
-Matching took 3.6 seconds
-Pairs per second: 18945  
 
-> email_ pairs = 46,481  
-Matching took 1.7 seconds  
-Pairs per second: 27040  
+Reading excel file 20190314_Working_March_rollupid.xlsx
+This section took 42 seconds
+Standardizing ssn
+Standardizing name
+Standardizing address
+Standardizing email
+Reading rules.txt file
+Filtering out invalid rows
+Preparing address, email, name columns for matching purposes
+84 seconds have elapsed already
+Starting Matching Process
 
-> address_ pairs = 2,965,992  
-Matching took 84.3 seconds  
-Pairs per second: 35197  
+ssn pairs = 70,959
+Matching took 4.5 seconds
+Pairs per second: 15867
 
-> ['last', 'initials'] pairs = 926,925  
-Matching took 35.3 seconds  
-Pairs per second: 26228  
+email_ pairs = 48,758
+Matching took 1.7 seconds
+Pairs per second: 28299
 
-> ['first', 'initials'] pairs = 2,023,933  
-Matching took 72.1 seconds  
-Pairs per second: 28054  
+address_ pairs = 2,976,469
+Matching took 83.7 seconds
+Pairs per second: 35543
 
-> Replaced 0 rows with new rollupid  
-ssn 3  
-name 902  
-address 2040  
-email 0  
-20190125_rev_rollupidv2.xlsx created in 117 seconds  
-This whole process took too long: 391 seconds  
-```
+['last', 'initials'] pairs = 950,536
+Matching took 36.7 seconds
+Pairs per second: 25886
+
+['first', 'initials'] pairs = 2,082,191
+Matching took 75.1 seconds
+Pairs per second: 27708
+
+Assigning rollupid to rows
+Replaced 33 rows with manual rollupid
+Calculating _ct columns and total_rollup
+
+Identifying possible false negatives
+5 same ssn have different rollupids
+926 same names have different rollupids
+1450 same addresses have different rollupids
+1 same emails have different rollupids
+Creating output excel file 20190314_Working_March_rollupid_processed.xlsx
+301 seconds have elapsed already
+20190314_Working_March_rollupidv2.xlsx created in 122 seconds
+This whole process took too long: 423 seconds
