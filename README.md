@@ -19,16 +19,17 @@ or git clone `git clone https://github.com/caocscar/hsip-deduplication.git`
 2. Change directory to the folder where the python script `hsip_rollupid.py` and **Excel** file resides.  
 For example, `cd C:\Users\caoa\Desktop\HSIP`
 3. Run the program with some input arguments.  
-For example, `python hsip_rollupid.py --filename "myfile.xlsx"`. Try to avoid spaces in the filename. Use an underscore instead.
-4. The program will create an output file by append `_processed` to the end of the filename (my file_processed).
+For example, `python hsip_rollupid.py --filename "inputfile.xlsx"`.  
+Try to avoid spaces in the filename and use an underscore instead.
+4. The program will create a new output file with `_processed` appended to the end of the filename (eg. `inputfile.xlsx` -> `inputfile_processed.xlsx`).
 
 ## Example
 Here is a sample command line which uses all the available keyword arguments.  
-`python hsip_rollupid.py --filename "my file.xlsx"`
+`python hsip_rollupid.py --filename "inputfile.xlsx"`
 
 Argument|Shorthand|Usage
 ---|:---:|---
---filename|-f|`python hsip_rollupid.py -f input_file.xlsx`
+--filename|-f|`python hsip_rollupid.py -f December.xlsx`
 
 **Tip:** You have to specify a `--filename` argument or it will complain.
 
