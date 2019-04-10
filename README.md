@@ -19,8 +19,8 @@ or git clone `git clone https://github.com/caocscar/hsip-deduplication.git`
 2. Change directory to the folder where the python script `hsip_rollupid.py` and **Excel** file resides.  
 For example, `cd C:\Users\caoa\Desktop\HSIP`
 3. Run the program with some input arguments.  
-For example, `python hsip_rollupid.py --filename "my file.xlsx"`
-4. The program will create an output file by append `_rollupid` to the end of the filename.
+For example, `python hsip_rollupid.py --filename "myfile.xlsx"`. Try to avoid spaces in the filename. Use an underscore instead.
+4. The program will create an output file by append `_processed` to the end of the filename (my file_processed).
 
 ## Example
 Here is a sample command line which uses all the available keyword arguments.  
@@ -34,12 +34,12 @@ Argument|Shorthand|Usage
 
 ## Input Excel File Requirements
 1. Any password protection should be removed from the file prior to running the program otherwise it will result in an error.
-2. The Excel file should have exactly two sheets. The first sheet (sheet order matters) should have the input data. The second sheet should contain all the invalid rows. The algorithm assumes several things:
-    a) There are two columns named **hsip** and **AP Control**.
-    b) All the relevant columns you want to preserve lie between these two columns.
-    c) With the exception of **new_rollupid**, **TIN MATCH**, **NOTES**. These go after **AP Control**.
-    d) Same for the columns that the algorithm modifies (see Output File section). They will be put after **AP Control**.
-    e) Python is case sensitive so existing column names should not be changed (eg. `city` is not the same as `City`).
+2. The Excel file should have exactly two sheets. The first sheet (sheet order matters) should have the input data. The second sheet should contain all the invalid rows. The algorithm assumes several things:  
+    a) There are two columns named **hsip** and **AP Control**.  
+    b) All the relevant columns you want to preserve lie between these two columns.  
+    c) With the exception of **new_rollupid**, **TIN MATCH**, **NOTES**. These go after **AP Control**.  
+    d) Same for the columns that the algorithm modifies (see Output File section). They will be put after **AP Control**.  
+    e) Python is case-sensitive so existing column names should not be changed (eg. `city` is not the same as `City`).  
 
 See `template.xlsx` for an example. Additional columns can be added that are not present in the template as long as they are situated between **hsip** and **AP Control**.
 
@@ -172,48 +172,48 @@ If it takes more than 15 minutes, there is probably something wrong and should b
 ## Progress Print Out
 The print out should look something like this if it runs without error.
 
-Reading excel file 20190314_Working_March_rollupid.xlsx
-This section took 42 seconds
-Standardizing ssn
-Standardizing name
-Standardizing address
-Standardizing email
-Reading rules.txt file
-Filtering out invalid rows
-Preparing address, email, name columns for matching purposes
-84 seconds have elapsed already
-Starting Matching Process
+Reading excel file 20190314_Working_March_rollupid.xlsx  
+This section took 42 seconds  
+Standardizing ssn  
+Standardizing name  
+Standardizing address  
+Standardizing email  
+Reading rules.txt file  
+Filtering out invalid rows  
+Preparing address, email, name columns for matching purposes  
+84 seconds have elapsed already  
+Starting Matching Process  
 
-ssn pairs = 70,959
-Matching took 4.5 seconds
-Pairs per second: 15867
+ssn pairs = 70,959  
+Matching took 4.5 seconds  
+Pairs per second: 15867  
 
-email_ pairs = 48,758
-Matching took 1.7 seconds
-Pairs per second: 28299
+email_ pairs = 48,758  
+Matching took 1.7 seconds  
+Pairs per second: 28299  
 
-address_ pairs = 2,976,469
-Matching took 83.7 seconds
-Pairs per second: 35543
+address_ pairs = 2,976,469  
+Matching took 83.7 seconds  
+Pairs per second: 35543  
 
-['last', 'initials'] pairs = 950,536
-Matching took 36.7 seconds
-Pairs per second: 25886
+['last', 'initials'] pairs = 950,536  
+Matching took 36.7 seconds  
+Pairs per second: 25886  
 
-['first', 'initials'] pairs = 2,082,191
-Matching took 75.1 seconds
-Pairs per second: 27708
+['first', 'initials'] pairs = 2,082,191  
+Matching took 75.1 seconds  
+Pairs per second: 27708  
 
-Assigning rollupid to rows
-Replaced 33 rows with manual rollupid
-Calculating _ct columns and total_rollup
+Assigning rollupid to rows  
+Replaced 33 rows with manual rollupid  
+Calculating _ct columns and total_rollup  
 
-Identifying possible false negatives
-5 same ssn have different rollupids
-926 same names have different rollupids
-1450 same addresses have different rollupids
-1 same emails have different rollupids
-Creating output excel file 20190314_Working_March_rollupid_processed.xlsx
-301 seconds have elapsed already
-20190314_Working_March_rollupidv2.xlsx created in 122 seconds
-This whole process took too long: 423 seconds
+Identifying possible false negatives  
+5 same ssn have different rollupids  
+926 same names have different rollupids  
+1450 same addresses have different rollupids  
+1 same emails have different rollupids  
+Creating output excel file 20190314_Working_March_rollupid_processed.xlsx  
+301 seconds have elapsed already  
+20190314_Working_March_rollupidv2.xlsx created in 122 seconds  
+This whole process took too long: 423 seconds  
