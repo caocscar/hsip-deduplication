@@ -20,7 +20,7 @@ or git clone `git clone https://github.com/caocscar/hsip-deduplication.git`
 For example, `cd C:\Users\caoa\Desktop\HSIP`
 3. Run the program with some input arguments.  
 For example, `python hsip_rollupid.py --filename "my file.xlsx"`
-4. The program will create an output file by append `_rollupid` to the end of the filename.  
+4. The program will create an output file by append `_rollupid` to the end of the filename.
 
 ## Example
 Here is a sample command line which uses all the available keyword arguments.  
@@ -32,17 +32,18 @@ Argument|Shorthand|Usage
 
 **Tip:** You have to specify a `--filename` argument or it will complain.
 
-## Input File Requirements
+## Input Excel File Requirements
 1. Any password protection should be removed from the file prior to running the program otherwise it will result in an error.
-2. The file should have at most two sheets. The first sheet should have the input data 
-The following table specifies the possible columns along with whether it is required and if the name is case sensitive:
+2. The Excel file should have exactly two sheets. The first sheet (sheet order matters) should have the input data. The second sheet should contain all the invalid rows. The algorithm assumes several things:
+    a) There are two columns named **hsip** and **AP Control**.
+    b) All the relevant columns you want to preserve lie between these two columns.
+    c) With the exception of **new_rollupid**, **TIN MATCH**, **NOTES**. These go after **AP Control**.
+    d) Same for the columns that the algorithm modifies (see Output File section). They will be put after **AP Control**.
+    e) Python is case sensitive so existing column names should not be changed (eg. `city` is not the same as `City`).
 
----|hsip|sid|hsip_sid|HUM #|name|email|ssn|address_1|address_2|city|county|state|postal|method|date|amt|entered|updated|status|origname|origemail|origssn|origaddress|AP Control|new_rollupid|TIN MATCH|NOTES
----|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---
-required|yes|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes
-name case-sensitive|yes|no|no|no|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|yes|no|no|no|no|yes|yes|yes|yes
+See `template.xlsx` for an example. Additional columns can be added that are not present in the template as long as they are situated between **hsip** and **AP Control**.
 
-## Output File
+## Output Excel File
 The program will add/modify the following columns in the output file.
 
 column|
@@ -71,7 +72,7 @@ These are the high-level steps in the algorithm.
 3. Standardize Name
     - move any email addresses to email column
     - keep only valid punctuation `-&` and remove the rest
-    - remove the following titles *(MD,PHD,FCCP,DDS,MBA,MHS**
+    - remove the following titles **MD,PHD,FCCP,DDS,MBA,MHS**
     - convert to UPPERCASE
 4. Standardize Address (address_1 and address_2)
     - swap **address_1** and **address_2** if **address_1** is blank and **address_2** is not

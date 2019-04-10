@@ -35,12 +35,12 @@ print(f'This section took {time.time()-t0:.0f} seconds')
 
 sheet_names = list(sheet_dict.keys())
 df_input = sheet_dict[0]
-if 'rollupid' in filename:
-    df_raw = df_input.loc[:,'hsip':'AP Control']
-    kathy = df_input[['AP Control','new_rollupid','TIN MATCH','NOTES']]
-    invalid_records = sheet_dict[1]
-else:
-    df_raw = df_input.copy()
+#if 'rollupid' in filename:
+df_raw = df_input.loc[:,'hsip':'AP Control']
+kathy = df_input[['AP Control','new_rollupid','TIN MATCH','NOTES']]
+invalid_records = sheet_dict[1]
+#else:
+#    df_raw = df_input.copy()
 
 print('Standardizing ssn')
 df_raw = standardize_ssn(df_raw)
@@ -93,10 +93,10 @@ score['AP Control'] = df_raw['AP Control']
 
 keep_rows = score['total'] >= 2
 df = df_raw[keep_rows]
-if 'rollupid' in filename:
-    invalid_records = invalid_records.append(df_raw[~keep_rows], sort=False)
-else:
-    invalid_records = df_raw[~keep_rows]
+#if 'rollupid' in filename:
+invalid_records = invalid_records.append(df_raw[~keep_rows], sort=False)
+#else:
+#    invalid_records = df_raw[~keep_rows]
 
 #%% data wrangling for matching purposes
 print('Preparing address, email, name columns for matching purposes')
@@ -167,10 +167,10 @@ assert master['name_'].notnull().all()
 assert master['ssn'].notnull().all()
 
 #%% manually override rollupid with new rollupid
-if 'rollupid' in filename:
-    df_override = kathy[(kathy['new_rollupid'] > 1e6) & keep_rows]
-    master.loc[df_override.index,'rollupid'] = df_override['new_rollupid']
-    print(f'Replaced {df_override.shape[0]} rows with manual rollupid')        
+#if 'rollupid' in filename:
+df_override = kathy[(kathy['new_rollupid'] > 1e6) & keep_rows]
+master.loc[df_override.index,'rollupid'] = df_override['new_rollupid']
+print(f'Replaced {df_override.shape[0]} rows with manual rollupid')        
 
 #%% Aggregating data
 print('Calculating _ct columns and total_rollup')
@@ -188,8 +188,8 @@ if 'entered' in df_date.columns:
 
 #%%
 xlsx = master.drop(['first','last','initials'], axis=1)
-if 'rollupid' in filename:
-    xlsx = xlsx.merge(kathy, how='left', on='AP Control')
+#if 'rollupid' in filename:
+xlsx = xlsx.merge(kathy, how='left', on='AP Control')
 
 #%% Identify possible false negatives
 print('\nIdentifying possible false negatives')
@@ -241,10 +241,7 @@ print(f'{len(address_set)} same addresses have different rollupids')
 print(f'{len(email_set)} same emails have different rollupids') 
 
 #%% Save results
-if 'rollupid' in filename:
-    outputfile = filename.replace('rollupid','rollupidv2')
-else:
-    outputfile = filename.replace('.xlsx','_processed.xlsx')
+outputfile = filename.replace('.xlsx','_processed.xlsx')
 print(f'Creating output excel file {outputfile}')
 print(f'{time.time()-t0:.0f} seconds have elapsed already')
 t5 = time.time()
