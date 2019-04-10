@@ -84,7 +84,7 @@ These are the high-level steps in the algorithm.
     - convert to UPPERCASE
 5. Standardize Email
     - convert to lowercase
-    - remove punctuation `._`
+    - remove the following punctuation `._`
 6. Read in [rules.txt](rules.txt) that contains a list of invalid entries.
 7. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**, **email**.
 8. Add invalid rows to the `invalid_rows` sheet.
@@ -120,7 +120,7 @@ These are the high-level steps in the algorithm.
 
 25. Create new columns to identify possible false negatives for further manual inspection  
 `same_ssn_diff_rollupid`  
-`same_email_diff_rollupid`
+`same_email_diff_rollupid`  
 `same_name_diff_rollupid`  
 `same_address1_diff_rollupid`  
 The algorithm will flag rows that have the same {ssn, name, address, email} but   different rollupid (a grouping). Certain rows will not be flagged if they meet the one of the following conditions:
