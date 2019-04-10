@@ -172,7 +172,7 @@ If it takes more than 15 minutes, there is probably something wrong and should b
 
 ## Progress Print Out
 The print out should look something like this if it runs without error.
-
+*******************************
 Reading excel file 20190314_Working_March_rollupid.xlsx  
 This section took 42 seconds  
 Standardizing ssn  
