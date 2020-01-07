@@ -31,7 +31,7 @@ def standardize_ssn(df):
 
 def standardize_name(df):
     df['name'].fillna('', inplace=True) # check for blank names
-    tf = df['name'].str.contains('@')
+    tf = df['name'].str.contains('@') # check if name column contains an email
     df.loc[tf,'email'] = df.loc[tf,'name'] # assign email to correct column
     df.loc[tf,'name'] = ''
     name_invalid_punctuation = re.sub(r'[-&]','',string.punctuation)
@@ -39,7 +39,7 @@ def standardize_name(df):
     regex_titles = re.compile(r'\b(MD|PHD|FCCP|DDS|MBA|MHS)\b')
     tmp = df['name'].apply(lambda x: re.sub(regex_punct, '', x))
     df['name'] = tmp.apply(lambda x: re.sub(regex_titles, '', x).strip(' ').upper() )
-    df['name'].replace({'': None}, inplace=True)
+    df['name'].replace({'': 'UNKNOWN'}, inplace=True)
     return df
 
 def look4careof(address):

@@ -24,7 +24,7 @@ args = parser.parse_args()
 if args.filename:
     filename = args.filename
 else:
-    filename = '20190314_Working_March_rollupid.xlsx'
+    filename = 'Master_Data_File-December_mod.xlsx'
 
 t0 = time.time()
 
@@ -108,6 +108,7 @@ tf = df['email'].notnull()
 df.loc[tf,'email_'] = df.loc[tf,'email'].apply(get_local_part)
 # Name Section
 df['name_'] = df['name'].str.replace(' - ','-').str.replace('-',' ')
+assert df['name_'].notnull().all()
 names = parse_name(df)
 names['initials'] = names['first'].str[0] + names['last'].str[0]
 df = df.merge(names, left_index=True, right_index=True)
