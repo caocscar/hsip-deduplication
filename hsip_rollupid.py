@@ -39,12 +39,9 @@ if df_input['AP Control'].isnull().any():
     print('The column "AP Control" contains at least one blank value.')
     print(f'Check row {df_input[df_input["AP Control"].isnull()].index[0] + 1}.')
     assert df_input['AP Control'].notnull().all()
-#if 'rollupid' in filename:
 df_raw = df_input.loc[:,'hsip':'AP Control']
 kathy = df_input[['AP Control','new_rollupid','TIN MATCH','NOTES']]
 invalid_records = sheet_dict[1]
-#else:
-#    df_raw = df_input.copy()
 
 print('Standardizing ssn')
 df_raw = standardize_ssn(df_raw)
@@ -97,10 +94,7 @@ score['AP Control'] = df_raw['AP Control']
 
 keep_rows = score['total'] >= 2
 df = df_raw[keep_rows]
-#if 'rollupid' in filename:
 invalid_records = invalid_records.append(df_raw[~keep_rows], sort=False)
-#else:
-#    invalid_records = df_raw[~keep_rows]
 
 #%% data wrangling for matching purposes
 print('Preparing address, email, name columns for matching purposes')
@@ -172,7 +166,6 @@ assert master['name_'].notnull().all()
 assert master['ssn'].notnull().all()
 
 #%% manually override rollupid with new rollupid
-#if 'rollupid' in filename:
 df_override = kathy[(kathy['new_rollupid'] > 1e6) & keep_rows]
 master.loc[df_override.index,'rollupid'] = df_override['new_rollupid']
 print(f'Replaced {df_override.shape[0]} rows with manual rollupid')        
