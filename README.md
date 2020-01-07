@@ -14,35 +14,24 @@ or git clone `git clone https://github.com/caocscar/hsip-deduplication.git`
 7. Unzip file to working directory (if necessary).
 8. Put input file in the same directory as `hsip_rollupid.py`.
 
-## Usage
-1. Open `Anaconda Prompt` from the Start Menu
-2. Change directory to the folder where the python script `hsip_rollupid.py` and **Excel** file resides.  
-For example, `cd C:\Users\caoa\Desktop\HSIP`
-3. Run the program with some input arguments.  
-For example, `python hsip_rollupid.py --filename "inputfile.xlsx"`.  
-Try to avoid spaces in the filename and use an underscore instead.
-4. The program will create a new output file with `_processed` appended to the end of the filename (eg. `inputfile.xlsx` -> `inputfile_processed.xlsx`).
-
-## Example
-Here is a sample command line which uses all the available keyword arguments.  
-`python hsip_rollupid.py --filename "inputfile.xlsx"`
-
-Argument|Shorthand|Usage
----|:---:|---
---filename|-f|`python hsip_rollupid.py -f December.xlsx`
-
-**Tip:** You have to specify a `--filename` argument or it will complain.
-
 ## Input Excel File Requirements
 1. Any password protection should be removed from the file prior to running the program otherwise it will result in an error.
-2. The Excel file should have exactly two sheets. The first sheet (sheet order matters) should have the input data. The second sheet should contain all the invalid rows. The algorithm assumes several things:  
-    a) There are two columns named **hsip** and **AP Control**.  
-    b) All the relevant columns you want to preserve lie between these two columns.  
-    c) With the exception of **new_rollupid**, **TIN MATCH**, **NOTES**. These go after **AP Control**.  
-    d) Same for the columns that the algorithm modifies (see Output File section). They will be put after **AP Control**.  
-    e) Python is case-sensitive so existing column names should not be changed (eg. `city` is not the same as `City`).  
+2. The excel file should have at least two sheets. The first sheet (sheet order matters) should have the input data. The second sheet should contain all the invalid rows.
+3. There should be two columns named **hsip** and **AP Control** in the first sheet.  **hsip** should be column A. **AP Control** should be the last column containing data (not counting headers of empty columns). See [section](#required-steps-with-december-data) below on what is **AP Control**. The **AP Control** column should NOT have any blank values.
+4. All the relevant columns you want to preserve lie between these two columns. The exceptions are **new_rollupid**, **TIN MATCH**, **NOTES**. These go after **AP Control**.
+5. Python is case-sensitive so column names should follow the names in the template (eg. `city` is not the same as `City`).
 
-See `template.xlsx` for an example. Additional columns can be added that are not present in the template as long as they are situated between **hsip** and **AP Control**.
+See `template.xlsx` for an example input excel spreadsheet with the requisite two sheets. Additional columns can be added that are not present in the template as long as they are situated between **hsip** and **AP Control**.
+
+## Required Steps with December Data
+Please do the following before processing the file for the first time with December data. The first four steps are needed because algorithm will modify these columns if it thinks there is a problem with the entry. The `orig` columns are used to be used for troubleshooting problems.
+1. Copy the `name` column to `origname` column
+2. Copy the `email` column to `origemail` column
+3. Copy the `ssn` column to `origssn` column
+4. Copy the `address_1` column to `origaddress_1` column
+5. Fill in the `AP Control` column with an unique identifier about where the row originated from. For example, in the past, we've used `HSIPDEC000001` for the first row in the December data. Six digits past the data should be sufficient for this dataset.
+
+The above steps should also be followed anytime new data is added to the first sheet like in January or March. 
 
 ## Output Excel File
 The program will add/modify the following columns in the output file.
@@ -61,6 +50,25 @@ same_ssn_diff_rollupid|
 same_name_diff_rollupid|
 same_address1_diff_rollupid|
 same_email_diff_rollupid|
+
+## Usage
+1. Open `Anaconda Prompt` from the Start Menu
+2. Change directory to the folder where the python script `hsip_rollupid.py` and **Excel** file resides.  
+For example, `cd C:\Users\caoa\Desktop\HSIP`
+3. Run the program with some input arguments.  
+For example, `python hsip_rollupid.py --filename "inputfile.xlsx"`.  
+Try to avoid spaces in the filename and use an underscore instead.
+4. The program will create a new output file with `_processed` appended to the end of the filename (eg. `inputfile.xlsx` -> `inputfile_processed.xlsx`).
+
+## Example
+Here is a sample command line which uses all the available keyword arguments.  
+`python hsip_rollupid.py --filename "inputfile.xlsx"`
+
+Argument|Shorthand|Usage
+---|:---:|---
+--filename|-f|`python hsip_rollupid.py -f December.xlsx`
+
+**Tip:** You have to specify a `--filename` argument or it will complain.
 
 ## Algorithm
 These are the high-level steps in the algorithm.

@@ -24,7 +24,7 @@ args = parser.parse_args()
 if args.filename:
     filename = args.filename
 else:
-    filename = 'Master_Data_File-December_mod.xlsx'
+    filename = 'Master_Data_File-December_python_input.xlsx'
 
 t0 = time.time()
 
@@ -35,6 +35,10 @@ print(f'This section took {time.time()-t0:.0f} seconds')
 
 sheet_names = list(sheet_dict.keys())
 df_input = sheet_dict[0]
+if df_input['AP Control'].isnull().any():
+    print('The column "AP Control" contains at least one blank value.')
+    print(f'Check row {df_input[df_input["AP Control"].isnull()].index[0] + 1}.')
+    assert df_input['AP Control'].notnull().all()
 #if 'rollupid' in filename:
 df_raw = df_input.loc[:,'hsip':'AP Control']
 kathy = df_input[['AP Control','new_rollupid','TIN MATCH','NOTES']]
@@ -74,7 +78,7 @@ rules_dict = defaultdict(list)
 for col, rule in Rules.groupby('column'):
     rules_dict[col] = rule['value'].tolist()
 
-list_k = []   
+list_k = []
 for col, invalid_entries in rules_dict.items():
     if col == 'email':
         rule1 = df_raw[col].isin(invalid_entries) | df_raw[col].isnull()
@@ -189,8 +193,7 @@ if 'entered' in df_date.columns:
 
 #%%
 xlsx = master.drop(['first','last','initials'], axis=1)
-if not kathy['AP Control'].isnull().all():
-    xlsx = xlsx.merge(kathy, how='left', on='AP Control')
+xlsx = xlsx.merge(kathy, how='left', on='AP Control')
 
 #%% Identify possible false negatives
 print('\nIdentifying possible false negatives')
