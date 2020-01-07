@@ -189,8 +189,8 @@ if 'entered' in df_date.columns:
 
 #%%
 xlsx = master.drop(['first','last','initials'], axis=1)
-#if 'rollupid' in filename:
-xlsx = xlsx.merge(kathy, how='left', on='AP Control')
+if not kathy['AP Control'].isnull().all():
+    xlsx = xlsx.merge(kathy, how='left', on='AP Control')
 
 #%% Identify possible false negatives
 print('\nIdentifying possible false negatives')
