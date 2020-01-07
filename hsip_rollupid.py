@@ -163,7 +163,7 @@ alex['rollupid'] = alex['rollupid'].astype(int)
 singletons = dakota[dakota['rollupid'].isnull()]
 singletons.dropna(axis=1, how='all', inplace=True)
 singletons['rollupid'] = range(maxid, maxid+singletons.shape[0])
-master = pd.concat([alex, singletons], ignore_index=False)
+master = pd.concat([alex, singletons], ignore_index=False, sort=False)
 assert master['name_'].notnull().all()
 assert master['ssn'].notnull().all()
 
