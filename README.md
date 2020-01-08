@@ -16,12 +16,12 @@ or git clone `git clone https://github.com/caocscar/hsip-deduplication.git`
 
 ## Input Excel File Requirements
 1. Any password protection should be removed from the file prior to running the program otherwise it will result in an error.
-2. The excel file should have at least two sheets. The first sheet (sheet order matters) should have the input data. The second sheet should contain all the invalid rows.
-3. There should be two columns named **hsip** and **AP Control** in the first sheet.  **hsip** should be column A. **AP Control** should be the last column containing data (not counting headers of empty columns). See [section](#required-steps-with-december-data) below on what is **AP Control**. The **AP Control** column should NOT have any blank values.
-4. All the relevant columns you want to preserve lie between these two columns. The exceptions are **new_rollupid**, **TIN MATCH**, **NOTES**. These go after **AP Control**.
+2. The excel file should have at least two sheets. The first sheet (sheet order matters) should have the input data. The second sheet should contain all the invalid rows. There can be sheets after this but they won't be read by the Python script.
+3. There should be two columns named `hsip` and `AP Control` in the first sheet.  `hsip` should be column A. `AP Control` should be the last column containing data (not counting headers of empty columns). See [section](#required-steps-with-december-data) below on what is `AP Control`. The `AP Control` column should NOT have any blank values.
+4. All the relevant columns you want to preserve lie between these two columns. The exceptions are `new_rollupid`, `TIN MATCH`, `NOTES`. These go after `AP Control`.
 5. Python is case-sensitive so column names should follow the names in the template (eg. `city` is not the same as `City`).
 
-See `template.xlsx` for an example input excel spreadsheet with the requisite two sheets. Additional columns can be added that are not present in the template as long as they are situated between **hsip** and **AP Control**.
+See *template.xlsx* for an example input excel spreadsheet with the requisite two sheets. Additional columns can be added that are not present in the template as long as they are situated between `hsip` and `AP Control`.
 
 ## Required Steps with December Data
 Please do the following before processing the file for the first time with December data. The first four steps are needed because algorithm will modify these columns if it thinks there is a problem with the entry. The `orig` columns are used to be used for troubleshooting problems.
@@ -30,6 +30,7 @@ Please do the following before processing the file for the first time with Decem
 3. Copy the `ssn` column to `origssn` column
 4. Copy the `address_1` column to `origaddress_1` column
 5. Fill in the `AP Control` column with an unique identifier about where the row originated from. For example, in the past, we've used `HSIPDEC000001` for the first row in the December data. Six digits past the data should be sufficient for this dataset.
+6. Copy the `invalid_rows` sheet from *template.xlsx* to the working file if one does not already exist.
 
 The above steps should also be followed anytime new data is added to the first sheet like in January or March. 
 
@@ -84,9 +85,9 @@ These are the high-level steps in the algorithm.
     - remove the following titles **MD,PHD,FCCP,DDS,MBA,MHS**
     - convert to UPPERCASE
 4. Standardize Address (address_1 and address_2)
-    - swap **address_1** and **address_2** if **address_1** is blank and **address_2** is not
-    - swap **address_1** and **address_2** if there is a a `C/O` in **address_1**
-    - combine **address_1** and **address_2** if there is only a number in **address_1**
+    - swap `address_1` and `address_2` if `address_1` is blank and `address_2` is not
+    - swap `address_1` and `address_2` if there is a a `C/O` in `address_1`
+    - combine `address_1` and `address_2` if there is only a number in `address_1`
     - move any email addresses to email column
     - keep only valid punctuation `-#/` and remove the rest
     - convert to UPPERCASE
@@ -94,7 +95,7 @@ These are the high-level steps in the algorithm.
     - convert to lowercase
     - remove the following punctuation `._`
 6. Read in [rules.txt](rules.txt) that contains a list of invalid entries.
-7. Removes rows from the dataset with at least two invalid entries or blank values among **name**, **ssn**, **address**, **email**.
+7. Removes rows from the dataset with at least two invalid entries or blank values among `name`, `ssn`, `address_1`, `email`.
 8. Add invalid rows to the `invalid_rows` sheet.
 
 9. Standardize common address words (e.g. Street to St) and direction (e.g. West to W).
@@ -104,27 +105,27 @@ These are the high-level steps in the algorithm.
 
 12. Replace hyphens with spaces for name for better matches.
 13. Parse name into `first` and `last` using the nameparser package.
-14. Created **initials** column from **first** and **last** name.
+14. Created `initials` column from `first` and `last` name.
 
 15. Define rules for matching (see [Matching section](#matching) below).
 
 16. Performs five rounds of matching using these blocking elements:
-    - **ssn**
-    - **email**
-    - **address**
-    - **last** & **initials**
-    - **first** & **initials**
+    - `ssn`
+    - `email`
+    - `address_1`
+    - `last` & `initials`
+    - `first` & `initials`
 
 17. Tabulate total score for each row that was compared
 18. Assigns a match to those pair with a score ≥ 2
-19. Creates a network graph and assigns a **rollupid** to each individual using the network's connected components.
-20. Override any **rollupid** with a manually assigned **new_rollupid**
+19. Creates a network graph and assigns a `rollupid` to each individual using the network's connected components.
+20. Override any `rollupid` with a manually assigned `new_rollupid`
 
-21. Calculate the total amount for each **rollupid**
-22. Get distinct count of name, email, ssn, address for each **rollupid**. A blank counts as a distinct value. 
-23. Enumerate records within each **rollupid** based on **date** column in reverse chronological order.
+21. Calculate the total amount for each `rollupid`
+22. Get distinct count of name, email, ssn, address for each `rollupid`. A blank counts as a distinct value. 
+23. Enumerate records within each `rollupid` based on `date` column in reverse chronological order.
 
-24. Format datetime columns **date** and **entered**  to only `Month-Day-Year`
+24. Format datetime columns `date` and `entered`  to MM-DD-YYYY
 
 25. Create new columns to identify possible false negatives for further manual inspection  
 `same_ssn_diff_rollupid`  
@@ -138,7 +139,7 @@ The algorithm will flag rows that have the same {ssn, name, address, email} but 
     - For address, any value that is considered common (found in more than 5 rows). This is to reduce the number of records flagged to look at. Addresses that are common are usually a university/business location. For example, *1500 E Medical Ctr Dr* is UM Hospital and *1285 Franz Hall Box 951563* is the UCLA Pyschology Dept.
 
 26. Write original dataset with new columns.
-27. Write additional sheet containing **invalid_rows**.
+27. Write additional sheet containing `invalid_rows`.
 
 The source code can be found [here](hsip_rollupid.py). There are other minor details in the code that I didn't mention. 
 
@@ -153,7 +154,7 @@ email|1.5
 ssn|1.0
 address|1.0
 
-**Note:** If there is only one name, the algorithm considers it a **first** name.
+**Note:** If there is only one name, the algorithm considers it a `first` name.
 
 ## String Matching
 We compare two strings using the [Jaro-Winkler distance](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance). A threshold of 0.82 is considered for a match.
